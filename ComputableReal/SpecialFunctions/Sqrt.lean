@@ -1,7 +1,8 @@
 import ComputableReal.IsComputable
+import Mathlib.Data.Real.Basic
 import Mathlib.Data.Real.Sqrt
 import Mathlib.Analysis.SpecialFunctions.Log.Base
-import Mathlib.Data.Real.GoldenRatio
+import Mathlib.NumberTheory.Real.GoldenRatio
 
 namespace ComputableℝSeq
 
@@ -11,7 +12,7 @@ namespace Sqrt
 
 theorem boundedSqrt_le_rsqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
     mkRat (Int.sqrt (y.num * b^n)) ((y.den * b^n).sqrt + 1) ≤ Real.sqrt y := by
-  simp only [Rat.mkRat_eq_div, Nat.cast_add, Nat.cast_one, Int.cast_add, Int.cast_one]
+  simp only [Rat.mkRat_eq_div, Nat.cast_add, Nat.cast_one]
   rify
   by_cases hy : y ≤ 0
   · have h₁ : √↑y = 0 := by
@@ -26,6 +27,8 @@ theorem boundedSqrt_le_rsqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
   conv_rhs =>
     equals √(↑(y.num * b^n)) / √(↑(y.den * b^n)) =>
       field_simp
+      push_cast
+      rw [Real.sqrt_mul (by positivity), Real.sqrt_mul (by positivity)]
       ring_nf
   apply div_le_div₀
   · exact Real.sqrt_nonneg _
@@ -35,13 +38,13 @@ theorem boundedSqrt_le_rsqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
     rify at this
     rw [this]
     norm_cast
-  · simp [← Nat.ne_zero_iff_zero_lt, Nat.sqrt_eq_zero]
+  · simp [← Nat.ne_zero_iff_zero_lt]
     positivity
   · exact Real.real_sqrt_le_nat_sqrt_succ
 
 theorem rsqrt_le_boundedSqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
     Real.sqrt y ≤ mkRat (Int.sqrt (y.num * b^n) + 1) (y.den * b^n).sqrt := by
-  simp only [Rat.mkRat_eq_div, Nat.cast_add, Nat.cast_one, Int.cast_add, Int.cast_one]
+  simp only [Rat.mkRat_eq_div, Int.cast_add, Int.cast_one]
   rify
   by_cases hy : y ≤ 0
   · have h₁ : √↑y = 0 := by
@@ -56,6 +59,8 @@ theorem rsqrt_le_boundedSqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
   conv_lhs =>
     equals √(↑(y.num * b^n)) / √(↑(y.den * b^n)) =>
       field_simp
+      push_cast
+      rw [Real.sqrt_mul (by positivity), Real.sqrt_mul (by positivity)]
       ring_nf
   apply div_le_div₀
   · have h₁ : 0 < (y.num * b ^ n).sqrt := by
@@ -63,10 +68,8 @@ theorem rsqrt_le_boundedSqrt (y : ℚ) (n : ℕ) (b : ℕ) (hb : 0 < b):
         rw [Int.sqrt.eq_1]
         norm_cast
         convert this
-        conv_rhs => apply (Int.toNat_ofNat _).symm
-        push_cast
+        rw [Int.toNat_mul (by positivity) (by positivity)]
         congr
-        exact (Int.toNat_of_nonneg ((Rat.num_pos.mpr hy).le)).symm
       by_contra h₁
       simp [← Nat.ne_zero_iff_zero_lt, Nat.sqrt_eq_zero, hy, hb.ne'] at h₁
     positivity
@@ -148,11 +151,11 @@ theorem sqrt_le_mkRat_add (q : ℚ) (n : ℕ) :
   nth_rewrite 4 [← Rat.mkRat_self q]
   nth_rewrite 1 [← Rat.mkRat_self q]
   simp only [Rat.mkRat_eq_div, Rat.cast_div, Rat.cast_intCast, Rat.cast_natCast, Nat.cast_nonneg,
-    Real.sqrt_div', Nat.cast_add, Nat.cast_one, Rat.cast_add, Rat.cast_one, one_div]
+    Real.sqrt_div', Nat.cast_add, Nat.cast_one, Rat.cast_add, Rat.cast_one]
   have hd := Rat.den_pos q
   generalize q.num = x, q.den = y at *
   clear q
-  rcases le_or_lt x 0 with h|h
+  rcases le_or_gt x 0 with h|h
   · have h₁ : √↑x = 0 := by
       rw [Real.sqrt_eq_zero']
       exact Int.cast_nonpos.mpr h
@@ -200,7 +203,7 @@ theorem sqrt_le_mkRat_add (q : ℚ) (n : ℕ) :
     rw [_root_.add_comm ε₂, sub_div, denom_err]
     rotate_left; positivity; positivity
 
-    rw [show √↑z * 2 ^ n / (√↑y * 2 ^ n) = √↑z / √↑y by field_simp; ring_nf]
+    rw [show √↑z * 2 ^ n / (√↑y * 2 ^ n) = √↑z / √↑y by field_simp]
     suffices (√↑z / √↑y * ε₂ / (√↑y * 2 ^ n + ε₂) ≤ √↑z / √↑y / 2 ^ n)
       ∧ (ε₁ / (√↑y * 2 ^ n + ε₂) ≤ √↑z / √↑y / 2 ^ n) by
       rcases this
@@ -238,7 +241,7 @@ theorem mkRat_sub_le_sqrt (q : ℚ) (n : ℕ) :
   nth_rewrite 4 [← Rat.mkRat_self q]
   nth_rewrite 3 [← Rat.mkRat_self q]
   simp only [Rat.mkRat_eq_div, Rat.cast_div, Rat.cast_intCast, Rat.cast_natCast, Nat.cast_nonneg,
-    Real.sqrt_div', Nat.cast_add, Nat.cast_one, Rat.cast_add, Rat.cast_one, one_div]
+    Real.sqrt_div']
   have hd := Rat.den_pos q
   generalize q.num = x, q.den = y at *
   clear q
@@ -269,7 +272,7 @@ theorem mkRat_sub_le_sqrt (q : ℚ) (n : ℕ) :
   -- "could be" arbitrarily close to zero, and so cause a big blowup in error.
   by_cases hd' : y = 1
   · subst y
-    simp only [Int.cast_add, Int.cast_one, one_mul, Nat.cast_one, Real.sqrt_one, div_one,
+    simp only [one_mul, Nat.cast_one, Real.sqrt_one, div_one,
       tsub_le_iff_right, ge_iff_le]
     rw [show (4 ^ n = ((2 ^ n) ^ 2 : ℕ)) by rw [Nat.pow_right_comm], Nat.sqrt_eq']
     rw [Real.sqrt_mul', show (4 ^ n = ((2 ^ n) ^ 2 : ℝ)) by norm_cast; rw [Nat.pow_right_comm], Real.sqrt_sq,
@@ -300,7 +303,7 @@ theorem mkRat_sub_le_sqrt (q : ℚ) (n : ℕ) :
   · positivity
   · nlinarith
 
-  rw [show √↑z * 2 ^ n / (√↑y * 2 ^ n) = √↑z / √↑y by field_simp; ring_nf]
+  rw [show √↑z * 2 ^ n / (√↑y * 2 ^ n) = √↑z / √↑y by field_simp]
   simp only [_root_.mul_neg, neg_div, sub_neg_eq_add]
   suffices (√↑z / √↑y * ε₁ / (√↑y * 2 ^ n + -ε₁) ≤ 3 * (√↑z / √↑y / 2 ^ n))
     ∧ (ε₂ / (√↑y * 2 ^ n + -ε₁) ≤ 4 * (√↑z / √↑y / 2 ^ n)) by
@@ -321,15 +324,16 @@ theorem mkRat_sub_le_sqrt (q : ℚ) (n : ℕ) :
   constructor
   · ring_nf
     rw [mul_assoc, mul_assoc _ _ 3, mul_le_mul_iff_of_pos_left (by positivity)]
-    apply mul_le_of_le_one_of_le' h₂.le ?_ (by positivity) (by positivity)
+    apply mul_le_of_le_one_of_le' h₂.le _ (by positivity) (by positivity)
+    rw [inv_pow]
     field_simp
-    rw [div_le_div_iff₀ hi₂ (by positivity)]
     calc (_ : ℝ) ≤ 3 * (1/3 * (2^n)) := by ring_nf; rfl
       _ ≤ 3 * ((√↑y - ε₁) * 2 ^ n) :=
         mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hi₁ (by positivity)) zero_le_three
       _ = 3 * (√↑y * 2 ^ n - ε₁ * 2 ^ n) := by ring_nf
       _ ≤ 3 * (√↑y * 2 ^ n - ε₁) :=
         mul_le_mul_of_nonneg_left (tsub_le_tsub_left (le_mul_of_one_le_right h₃ h2pow) _) (by positivity)
+    linarith
   · rw [div_div, mul_div, ← sub_eq_add_neg]
     rw [div_le_div_iff₀ hi₂ (by positivity)]
     apply mul_le_of_le_one_of_le' h₅ ?_ (by positivity) (by positivity)
@@ -375,6 +379,7 @@ theorem sqrt_le_sqrtq_add (r : ℝ) (x : ℚInterval) (n : ℕ) (hq : x.fst ≤ 
     rify at this
     have : (0 : ℝ) ≤ 2^n - 2 := sub_nonneg_of_le this
     field_simp
+    simp only [zero_mul]
     positivity
   trans (x.snd - x.fst) / (2 * √x.fst) * (1 - 2 / 2^n)
   · rw [h₃]
@@ -425,6 +430,7 @@ theorem sqrt_le_sqrtq_add' (r : ℝ) (x : ℚInterval) (n : ℕ) (hq : x.fst ≤
     rify at this
     have : (0 : ℝ) ≤ 2^n - 2 := sub_nonneg_of_le this
     field_simp
+    simp only [zero_mul]
     positivity
   trans (x.snd - x.fst) / (√r) * (1 - 2 / 2^n)
   · refine mul_le_mul_of_nonneg_right ?_ h₄
@@ -523,7 +529,7 @@ theorem TLUW_lower : TendstoLocallyUniformlyWithout
   rw [TendstoLocallyUniformlyWithout]
   intro ε hε x
   dsimp
-  rcases lt_or_le x 0 with h|h
+  rcases lt_or_ge x 0 with h|h
   · use Set.Iic 0, Iic_mem_nhds h, 0
     intro b _ y hy
     change y ≤ (0:ℝ) at hy
@@ -572,7 +578,7 @@ theorem TLUW_upper : TendstoLocallyUniformlyWithout
   rw [TendstoLocallyUniformlyWithout]
   intro ε hε x
   dsimp
-  rcases lt_or_le x 0 with h|h
+  rcases lt_or_ge x 0 with h|h
   · use Set.Iic 0, Iic_mem_nhds h, 0
     intro b _ y hy
     change y ≤ (0:ℝ) at hy
@@ -580,7 +586,7 @@ theorem TLUW_upper : TendstoLocallyUniformlyWithout
     have h₂ : Int.sqrt (y.num * 4 ^ b) = 0 := by
       rw [Int.sqrt.eq_1, Int.ofNat_eq_zero, Nat.sqrt_eq_zero, Int.toNat_eq_zero]
       exact Int.mul_nonpos_of_nonpos_of_nonneg (Rat.num_nonpos.mpr <| hy') (by positivity)
-    simp [Real.sqrt_eq_zero'.mpr hy, h₂, hε, hy']
+    simp [Real.sqrt_eq_zero'.mpr hy, hε, hy']
   · set tm := max (2 * x) 1
     have htm₀ : 0 < tm := by positivity
     have htm : x < tm := by
@@ -596,7 +602,7 @@ theorem TLUW_upper : TendstoLocallyUniformlyWithout
     · have h₂ : Int.sqrt (q.num * 4 ^ b) = 0 := by
         rw [Int.sqrt.eq_1, Int.ofNat_eq_zero, Nat.sqrt_eq_zero, Int.toNat_eq_zero]
         exact Int.mul_nonpos_of_nonpos_of_nonneg (Rat.num_nonpos.mpr hq₃) (by positivity)
-      simp [Real.sqrt_eq_zero'.mpr (Rat.cast_nonpos.mpr hq₃), h₂, hε, hq₃]
+      simp [Real.sqrt_eq_zero'.mpr (Rat.cast_nonpos.mpr hq₃), hε, hq₃]
     have hb₂ := mkRat_sub_le_sqrt q b
     rw [if_neg hq₃] at hb₂ ⊢
     push_neg at hq₃
@@ -615,6 +621,10 @@ theorem TLUW_upper : TendstoLocallyUniformlyWithout
     rw [div_le_iff₀ (by positivity)] at hb
     rw [div_lt_iff₀ (by positivity), _root_.mul_comm ε]
     linarith
+
+end Sqrt
+
+open Sqrt
 
 def sqrt : ComputableℝSeq → ComputableℝSeq :=
   of_TendstoLocallyUniformly_Continuous
@@ -650,7 +660,7 @@ def sqrt : ComputableℝSeq → ComputableℝSeq :=
     dsimp at *
     split_ifs with h
     · suffices √x = 0 by
-        simp [h, this]
+        simp [this]
       rw [Real.sqrt_eq_zero']
       exact le_trans hx₂ (Rat.cast_nonpos.mpr h)
     · have := sqrt_ub_le_ub ⟨⟨q₁, q₂⟩, hq⟩ n
@@ -658,20 +668,19 @@ def sqrt : ComputableℝSeq → ComputableℝSeq :=
       exact le_trans (Real.sqrt_le_sqrt hx₂) this
   )
 
-end Sqrt
-
 end ComputableℝSeq
 
 namespace IsComputable
 
+@[macro_inline]
 instance instComputableSqrt (x : ℝ) [hx : IsComputable x] : IsComputable (x.sqrt) :=
-  .lift (Real.sqrt) ComputableℝSeq.Sqrt.sqrt
+  .lift (Real.sqrt) ComputableℝSeq.sqrt
     (by apply ComputableℝSeq.val_of_TendstoLocallyUniformly_Continuous) hx
 
-instance instComputableGoldenRatio : IsComputable goldenRatio :=
+instance instComputableGoldenRatio : IsComputable Real.goldenRatio :=
   inferInstanceAs (IsComputable ((1 + √5) / 2))
 
-instance instComputableGoldenConj : IsComputable goldenConj :=
+instance instComputableGoldenConj : IsComputable Real.goldenConj :=
   inferInstanceAs (IsComputable ((1 - √5) / 2))
 
 end IsComputable

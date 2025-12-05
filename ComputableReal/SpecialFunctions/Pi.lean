@@ -1,5 +1,5 @@
 import ComputableReal.SpecialFunctions.Sqrt
-import Mathlib.Data.Real.Pi.Bounds
+import Mathlib.Analysis.Real.Pi.Bounds
 import Mathlib.Analysis.SpecialFunctions.Trigonometric.Basic
 
 open scoped QInterval
@@ -8,6 +8,7 @@ namespace ComputableℝSeq
 
 section Pi
 
+@[macro_inline]
 instance instComputableSqrtTwoAddSeries (x : ℝ) [hx : IsComputable x] (n : ℕ) :
     IsComputable (Real.sqrtTwoAddSeries x n) :=
   n.rec hx (fun _ _ ↦ IsComputable.instComputableSqrt _)
@@ -74,7 +75,7 @@ theorem sqrtTwoAddSeries_n_lb_gt_one (n k : ℕ) (hk : 3 ≤ k) : 1 ≤ (sqrtTwo
     apply sub_le_sub_left
     apply div_le_div₀ zero_le_two le_rfl Nat.ofNat_pos'
     rw [show 8 = (2 : ℝ) ^ 3 by norm_num]
-    exact_mod_cast Nat.pow_le_pow_of_le_right Nat.ofNat_pos' hk
+    exact_mod_cast Nat.pow_le_pow_right Nat.ofNat_pos' hk
 
 theorem sqrtTwoAddSeries_n_bounds (n k : ℕ) (hk : 3 ≤ k) :
     (sqrtTwoAddSeries_n n).ub k ≤ (sqrtTwoAddSeries_n n).lb k + 18 * n / 2^k
@@ -323,7 +324,7 @@ def pi_ub (n : ℕ) : ℚ :=
 
 theorem pi_lb_le_pi (n : ℕ) : pi_lb n ≤ Real.pi := by
   refine le_trans ?_ (Real.pi_gt_sqrtTwoAddSeries n).le
-  simp only [pi_lb, Rat.cast_mul, Rat.cast_pow, Rat.cast_ofNat, Nat.ofNat_pos, pow_pos, mul_le_mul_left]
+  simp only [pi_lb, Rat.cast_mul, Rat.cast_pow, Rat.cast_ofNat, Nat.ofNat_pos, pow_pos, mul_le_mul_iff_right₀]
   convert ComputableℝSeq.hlb _ _
   symm
   exact IsComputable.prop
@@ -331,7 +332,7 @@ theorem pi_lb_le_pi (n : ℕ) : pi_lb n ≤ Real.pi := by
 theorem pi_ub_ge_pi (n : ℕ) : Real.pi ≤ pi_ub n := by
   refine le_trans (Real.pi_lt_sqrtTwoAddSeries n).le ?_
   simp only [one_div, pi_ub, Rat.cast_add, Rat.cast_mul, Rat.cast_pow, Rat.cast_ofNat, Rat.cast_inv,
-    add_le_add_iff_right, Nat.ofNat_pos, pow_pos, mul_le_mul_left]
+    add_le_add_iff_right, Nat.ofNat_pos, pow_pos, mul_le_mul_iff_right₀]
   rw [← ge_iff_le]
   convert ComputableℝSeq.hub _ _
   symm

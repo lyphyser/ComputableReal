@@ -4,6 +4,7 @@ import Mathlib.Data.Real.ConjExponents
 
 namespace IsComputable
 
+@[macro_inline]
 instance instComputableOfScientific (m : ℕ) (b : Bool) (e : ℕ) :
     IsComputable (@OfScientific.ofScientific ℝ NNRatCast.toOfScientific m b e) :=
   ⟨(OfScientific.ofScientific m b e : ℚ),
@@ -11,17 +12,20 @@ instance instComputableOfScientific (m : ℕ) (b : Bool) (e : ℕ) :
 
 --Note that if `(x y : ℝ)` comes after `Decidable`, the compiler won't drop them
 -- early enough in the compilation process, and this will fail as noncomputable.
+@[macro_inline]
 instance instComputableDite (p : Prop) (x : p → ℝ) (y : ¬p → ℝ) [Decidable p]
     [hx : ∀ p, IsComputable (x p)] [hy : ∀ p, IsComputable (y p)]
     : IsComputable (dite p x y) :=
   if h : p then lift_eq (by simp [h]) (hx h) else lift_eq (by simp [h]) (hy h)
 
-@[inline]
+--@[inline]
+@[macro_inline]
 instance instComputableIte (p : Prop) (x y : ℝ) [Decidable p]
     [hx : IsComputable x] [hy : IsComputable y] : IsComputable (ite p x y) :=
   instComputableDite p _ _
 
-@[inline]
+--@[inline]
+@[macro_inline]
 instance instComputableSign (x : ℝ) [hx : IsComputable x] : IsComputable (x.sign) :=
   ⟨hx.seq.sign,
     by
@@ -34,10 +38,12 @@ instance instComputableSign (x : ℝ) [hx : IsComputable x] : IsComputable (x.si
 --TODO: This really should operate "directly" on the sequences, so that it doesn't
 --require a comparison first. For instance, `max (√2 - √2) 0 < 1` will never terminate
 --with this implementation.
+@[macro_inline]
 instance instComputableMax (x y : ℝ) [hx : IsComputable x] [hy : IsComputable y] :
     IsComputable (max x y) :=
   lift_eq (x := ite (x ≤ y) ..) (by rw [max_def]; congr) inferInstance
 
+@[macro_inline]
 instance instComputableMin (x y : ℝ) [hx : IsComputable x] [hy : IsComputable y] :
     IsComputable (min x y) :=
   lift_eq (x := ite (x ≤ y) ..) (by rw [min_def]; congr) inferInstance
@@ -46,15 +52,18 @@ instance instComputableMin (x y : ℝ) [hx : IsComputable x] [hy : IsComputable 
 --slowdown when many nested `abs` are present); would be good to write one that
 --directly takes the abs of each interval. Also, never returns a value for
 -- `abs (√2 - √2)`, for the same reasons as max.
+@[macro_inline]
 instance instComputableAbs (x : ℝ) [hx : IsComputable x] : IsComputable |x| :=
   lift_eq (abs.eq_1 x).symm inferInstance
 
+@[macro_inline]
 instance instComputableConjExponent (x : ℝ) [hx : IsComputable x] :
     IsComputable x.conjExponent :=
   lift_eq (Real.conjExponent.eq_1 x).symm inferInstance
 
 --Again, the order of arguments matters: if the argument `xs` is moved after
 -- `s`, then compilation breaks.
+@[macro_inline]
 instance instComputableFinsetSum {ι : Type*} (xs : ι → ℝ) (s : Finset ι)
     [hxs : ∀ i, IsComputable (xs i)] : IsComputable (Finset.sum s xs) :=
   ⟨Finset.fold (· + ·) 0 (fun i ↦ (hxs i).seq) s,

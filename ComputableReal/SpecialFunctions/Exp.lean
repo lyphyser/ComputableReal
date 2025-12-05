@@ -1,5 +1,5 @@
 import ComputableReal.IsComputable
-import Mathlib.Data.Complex.Exponential
+import Mathlib.Analysis.Complex.Exponential
 import Mathlib.Analysis.SpecialFunctions.Exp
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
@@ -66,18 +66,25 @@ lemma List_foldr_eq_finset_sum (x : ℚ) (n : ℕ) :
       rw [this]
       ring
     field_simp
-    ring_nf
 
 theorem exp_lb₀_pos {x : ℚ} (n : ℕ) (hx : 0 ≤ x) : 0 < exp_lb₀ x n := by
   rw [exp_lb₀, List_foldr_eq_finset_sum, Finset.range_add_one']
   rw [Finset.sum_insert (by simp)]
+  apply pow_pos
+  apply Right.add_pos_of_pos_of_nonneg (by positivity)
+  apply Finset.sum_nonneg
+  intro i _
   positivity
 
 theorem exp_lb₀_ge_one {x : ℚ} (n : ℕ) (hx : 0 ≤ x) : 1 ≤ exp_lb₀ x n := by
   rw [exp_lb₀, List_foldr_eq_finset_sum, Finset.range_add_one']
   rw [Finset.sum_insert (by simp)]
   apply one_le_pow₀
-  simpa using by positivity
+  simp only [pow_zero, Nat.factorial_zero, Nat.cast_one, ne_eq, one_ne_zero, not_false_eq_true,
+    div_self, le_add_iff_nonneg_right]
+  apply Finset.sum_nonneg
+  intro i _
+  positivity
 
 theorem exp_lb₀_le_exp {x : ℚ} (n : ℕ) (hx : 0 ≤ x) : exp_lb₀ x n ≤ Real.exp x := by
   rw [exp_lb₀, List_foldr_eq_finset_sum]
@@ -88,7 +95,10 @@ theorem exp_lb₀_le_exp {x : ℚ} (n : ℕ) (hx : 0 ≤ x) : exp_lb₀ x n ≤ 
       rwa [Nat.ne_zero_iff_zero_lt, Int.lt_toNat, Int.lt_ceil]
   rw [he]
   push_cast
-  apply pow_le_pow_left₀ (by positivity)
+  apply pow_le_pow_left₀ (by
+    apply Finset.sum_nonneg
+    intro i _
+    positivity)
   apply_mod_cast Real.sum_le_exp_of_nonneg
   positivity
 
@@ -167,6 +177,9 @@ theorem exp_ub₀_sub_exp_lb₀ {x : ℚ} (n : ℕ) (hx : 0 ≤ x) :
   have hy : y ≠ 0 := by
     apply ne_of_gt
     rw [hdy, Finset.range_add_one', Finset.sum_insert (by simp)]
+    apply Right.add_pos_of_pos_of_nonneg (by positivity)
+    apply Finset.sum_nonneg
+    intro i _
     positivity
   conv_lhs =>
     equals (y ^ ⌈x⌉.toNat * ((1 + z / y)^⌈x⌉.toNat - 1) : ℝ) =>
@@ -176,6 +189,11 @@ theorem exp_ub₀_sub_exp_lb₀ {x : ℚ} (n : ℕ) (hx : 0 ≤ x) :
 
   have hxn : 0 < ↑⌈x⌉.toNat := by simpa
   have hz : 0 < z := by positivity
+  have hy: 0 < y := by
+    apply Finset.sum_pos
+    intro i _
+    positivity
+    exact Finset.nonempty_range_add_one
   have hzy₀ : 0 < z / y := by positivity
   have hy₂ : y ^ ⌈x⌉.toNat ≤ Real.exp x := by
     have := exp_lb₀_le_exp n hx.le
@@ -186,12 +204,16 @@ theorem exp_ub₀_sub_exp_lb₀ {x : ℚ} (n : ℕ) (hx : 0 ≤ x) :
     trans z
     · apply div_le_self hz.le
       rw [hdy, Finset.range_add_one']
-      simp
+      simp only [Finset.mem_map, Finset.mem_range, Function.Embedding.coeFn_mk, Nat.add_eq_zero_iff,
+        one_ne_zero, and_false, exists_const, not_false_eq_true, Finset.sum_insert, pow_zero,
+        Nat.factorial_zero, Nat.cast_one, ne_eq, div_self, Finset.sum_map, le_add_iff_nonneg_right]
+      apply Finset.sum_nonneg
+      intro i _
       positivity
     · unfold z
       refine div_le_div₀ (by positivity) ?_ (by positivity) ?_
-      · simp only [pow_succ, Nat.ofNat_pos, mul_le_mul_left]
-        refine mul_le_of_le_one_left (by positivity) ?_
+      · simp only [pow_succ, Nat.ofNat_pos, mul_le_mul_iff_right₀]
+        apply mul_le_of_le_one_left (by positivity)
         apply pow_le_one₀ (by positivity)
         rw [div_le_one₀ (by positivity)]
         refine (Int.le_ceil x).trans ?_
@@ -216,6 +238,7 @@ theorem exp_ub₀_sub_exp_lb₀ {x : ℚ} (n : ℕ) (hx : 0 ≤ x) :
   rw [sub_nonneg]
   apply one_le_pow₀
   rw [le_add_iff_nonneg_right]
+  norm_cast
   positivity
 
 /-- Unlike `exp_lb₀`, which only works for `0 ≤ x`, this is valid for all `x`. -/
@@ -269,9 +292,8 @@ theorem exp_ub_sub_exp_lb_of_neg {x : ℚ} (n : ℕ) (hx : x < 0) :
 
   conv_lhs =>
     equals (exp_ub₀ x n - exp_lb₀ x n : ℝ) / (exp_ub₀ x n * exp_lb₀ x n) =>
+      norm_cast
       field_simp
-      left
-      ring_nf
 
   rw [div_le_iff₀ (by positivity)]
   refine hlu.trans ?_
@@ -458,16 +480,20 @@ end ComputableℝSeq
 
 namespace IsComputable
 
+@[macro_inline]
 instance instComputableExp (x : ℝ) [hx : IsComputable x] : IsComputable (Real.exp x) :=
   lift Real.exp ComputableℝSeq.exp
     (by apply ComputableℝSeq.val_of_TendstoLocallyUniformly_Continuous) hx
 
+@[macro_inline]
 instance instComputableSinh (x : ℝ) [hx : IsComputable x] : IsComputable (Real.sinh x) :=
   lift_eq (Real.sinh_eq x).symm inferInstance
 
+@[macro_inline]
 instance instComputableCosh (x : ℝ) [hx : IsComputable x] : IsComputable (Real.cosh x) :=
   lift_eq (Real.cosh_eq x).symm inferInstance
 
+@[macro_inline]
 instance instComputableTanh (x : ℝ) [hx : IsComputable x] : IsComputable (Real.tanh x) :=
   lift_eq (Real.tanh_eq_sinh_div_cosh x).symm inferInstance
 

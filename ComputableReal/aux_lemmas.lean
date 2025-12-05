@@ -1,8 +1,16 @@
 import Mathlib.Data.Real.Archimedean
 
+theorem mul_le_of_le_of_le_one_of_nonneg {α: Type*} {a b c: α} [Zero α] [MulOneClass α] [Preorder α] [PosMulMono α] (h : b ≤ c) (ha : a ≤ 1) (hb : 0 ≤ b) :
+    b * a ≤ c :=
+  (mul_le_of_le_one_right hb ha).trans h
+
+theorem mul_le_of_le_one_of_le' {α: Type*} {a b c: α} [Zero α] [MulOneClass α] [Preorder α] [PosMulMono α] [MulPosMono α] (ha : a ≤ 1) (bc : b ≤ c) (a0 : 0 ≤ a)
+    (c0 : 0 ≤ c) : a * b ≤ c :=
+  (mul_le_mul_of_nonneg_left bc a0).trans <| mul_le_of_le_one_left c0 ha
+
 --============
 --silly lemmas
-theorem abs_ite_le [inst : LinearOrderedAddCommGroup α] (x : α) :
+theorem abs_ite_le [AddCommGroup α] [LinearOrder α] [IsOrderedAddMonoid α] (x : α) :
     abs x = if 0 ≤ x then x else -x := by
   split_ifs <;> simp_all
   next h =>
@@ -10,7 +18,7 @@ theorem abs_ite_le [inst : LinearOrderedAddCommGroup α] (x : α) :
 
 namespace CauSeq
 
-variable [LinearOrderedField α] {a b : CauSeq α abs}
+variable [Field α] [LinearOrder α] [IsStrictOrderedRing α] {a b : CauSeq α abs}
 
 theorem sup_equiv_of_equivs (ha : a ≈ c) (hb : b ≈ c) : a ⊔ b ≈ c := by
   intro n hn

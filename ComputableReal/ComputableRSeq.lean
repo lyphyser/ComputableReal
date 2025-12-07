@@ -9,6 +9,7 @@ import Mathlib.Topology.Instances.Rat
 
 import ComputableReal.aux_lemmas
 import ComputableReal.NonemptyInterval
+import ComputableReal.Sometone
 
 namespace QInterval
 
@@ -180,6 +181,9 @@ theorem lb_le_ub (x : ComputableℝSeq) : ∀n, x.lb n ≤ x.ub n :=
 @[ext]
 theorem ext {x y : ComputableℝSeq} (h₁ : ∀ n, x.lb n = y.lb n) (h₂ : ∀ n, x.ub n = y.ub n) : x = y :=
   mk'.injEq _ _ _ _ _ _ _ _ _ _ ▸ (funext fun n ↦ NonemptyInterval.ext (Prod.ext (h₁ n) (h₂ n)))
+
+theorem ext' {x y : ComputableℝSeq} (h : ∀ n, x.lub n = y.lub n) : x = y :=
+  mk'.injEq _ _ _ _ _ _ _ _ _ _ ▸ (funext h)
 
 /-- All rational numbers `q` have a computable sequence: the constant sequence `q`. -/
 def ofRat (q : ℚ) : ComputableℝSeq :=
@@ -960,15 +964,37 @@ theorem mul_comm (x y : ComputableℝSeq) : x * y = y * x := by
     rw [← sup_assoc, ← sup_assoc]
     nth_rw 2 [sup_comm]
 
-/-
 theorem mul_assoc (x y z : ComputableℝSeq) : (x * y) * z = x * (y * z) := by
-  ext n
-  · simp only [lb_mul, ub_mul, mul_lb, mul_ub]
-    simp
-    grind (splits := 100)
-    sorry
-  · sorry
--/
+  apply ext'
+  intro n
+  unfold instHMul instMul mul mul' QInterval.mul_pair
+  apply NonemptyInterval.map_injective (Rat.castOrderEmbedding: ℚ ↪o ℝ)
+
+  repeat
+    simp only [NonemptyInterval.map_map₂mm]
+    simp only [OrderEmbedding.toOrderHom_coe, Rat.castOrderEmbedding_apply, Rat.cast_mul]
+    simp only [← Rat.castOrderEmbedding_apply, ← OrderEmbedding.toOrderHom_coe]
+    simp only [← NonemptyInterval.map₂mm_map_left (f := λ x y ↦ x * ((Rat.castOrderEmbedding.toOrderHom: ℚ →o ℝ) y))]
+    simp only [← NonemptyInterval.map₂mm_map_right (f := λ x y ↦ x * y)]
+
+  apply NonemptyInterval.coeHom.injective
+  simp only [NonemptyInterval.coe_coeHom]
+  have := λ xs ys ↦ NonemptyInterval.map₂mm_eq_image2 (α := ℝ) (β := ℝ) (γ := ℝ) (f := (· * ·)) (xs := xs) (ys := ys) (by
+    intro x hx
+    apply Continuous.continuousOn
+    apply mulRight_continuous) (by
+    intro x hx
+    apply Sometone.sometoneOn
+    apply mul_right_sometone) (by
+    intro x hx
+    apply Continuous.continuousOn
+    apply mulLeft_continuous) (by
+    intro x hx
+    apply Sometone.sometoneOn
+    apply mul_left_sometone)
+  simp only [this]
+  apply Set.image2_assoc
+  exact _root_.mul_assoc
 
 /-
 theorem left_distrib (x y z : ComputableℝSeq) : x * (y + z) = x * y + x * z := by

@@ -48,6 +48,9 @@ end lattice
 
 section pre_pre_lattice
 variable [Preorder α] [Preorder β] [Lattice γ] [Lattice δ]
+public def map_injective (f : α ↪o β) : Function.Injective (NonemptyInterval.map f.toOrderHom) := by
+  apply Function.Injective.of_comp (f := NonemptyInterval.toProd)
+  exact ((Function.Injective.prodMap f.injective f.injective).comp NonemptyInterval.toProd_injective)
 
 public theorem image2_subset_map₂mm {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, SometoneOn (f · y) xs) (hfr: ∀ x ∈ xs, SometoneOn (f x) ys): Set.image2 f xs ys ⊆ map₂mm f xs ys := by
   rw [@Set.image2_subset_iff_right]
@@ -171,4 +174,5 @@ public theorem map₂'_eq_image2 {f: α → β → γ} {xs : NonemptyInterval α
   · exact map₂'_subset_image2 hfcl hfl hfcr hfr
   · exact image2_subset_map₂' hfl hfr
 end
+
 end NonemptyInterval

@@ -1,25 +1,36 @@
+import Mathlib.Order.Interval.Basic
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Data.Real.Archimedean
 import Mathlib.Data.Sign.Defs
 import Mathlib.Tactic.Rify
+import Mathlib.Algebra.Group.Pointwise.Set.Basic
+import Mathlib.Topology.Order.IntermediateValue
+import Mathlib.Topology.Instances.Rat
 
 import ComputableReal.aux_lemmas
+import ComputableReal.NonemptyInterval
 
 namespace QInterval
 
 scoped notation "ℚInterval" => NonemptyInterval ℚ
+scoped notation "ℝInterval" => NonemptyInterval ℝ
 
-scoped instance (priority := 100) instMemℝℚInterval : Membership ℝ ℚInterval :=
-  ⟨fun s a => s.fst ≤ a ∧ a ≤ s.snd⟩
+noncomputable instance : Coe ℚInterval ℝInterval where
+  coe s := s.map Rat.castOrderEmbedding.toOrderHom
+
+scoped instance (priority := 100) instMemℝℚInterval : Membership ℝ ℚInterval where
+  mem s a := a ∈ (s: ℝInterval)
+
+theorem mem_def {x: ℝ} {s: ℚInterval}: x ∈ s ↔ SetLike.instMembership.mem (s: ℝInterval) x := by
+  simp [instMemℝℚInterval]
+
+@[simp]
+theorem mem_coe_iff {x: ℚ} {s: ℚInterval}: (x: ℝ) ∈ s ↔ SetLike.instMembership.mem s x := by
+  simp [instMemℝℚInterval, NonemptyInterval.mem_def]
 
 section mul
-/--Multiplication on intervals of ℚ. TODO: Should generalize to any LinearOrderedField... -/
-def mul_pair (x y : ℚInterval) : ℚInterval :=
-  let ⟨⟨xl,xu⟩,_⟩ := x
-  let ⟨⟨yl,yu⟩,_⟩ := y
-  ⟨⟨min (min (xl*yl) (xu*yl)) (min (xl*yu) (xu*yu)),
-    max (max (xl*yl) (xu*yl)) (max (xl*yu) (xu*yu))⟩,
-    by simp only [le_max_iff, min_le_iff, le_refl, true_or, or_true, or_self]⟩
+abbrev mul_pair (x y : ℚInterval) : ℚInterval :=
+  x.map₂mm (· * ·) y
 
 /--Multiplication of intervals by a ℚ. TODO: Should generalize to any LinearOrderedField -/
 def mul_q (x : ℚInterval) (y : ℚ) : ℚInterval :=
@@ -37,39 +48,31 @@ scoped instance : HMul (ℚInterval) ℚ (ℚInterval) :=
 scoped instance : HDiv (ℚInterval) ℚ (ℚInterval) :=
   ⟨fun x y ↦ x * y⁻¹⟩
 
-section slow
-set_option maxHeartbeats 400000
-theorem mul_pair_lb_is_lb {x y : ℚInterval} : ∀ xv ∈ x, ∀ yv ∈ y,
-    (mul_pair x y).fst ≤ xv * yv := by
-  intro xv ⟨hxl,hxu⟩ yv ⟨hyl,hyu⟩
-  dsimp [mul_pair]
-  push_cast
-  rcases le_or_gt xv 0 with hxn|hxp
-  all_goals rcases le_or_gt (y.fst:ℝ) 0 with hyln|hylp
-  all_goals rcases le_or_gt (y.snd:ℝ) 0 with hyun|hyup
-  all_goals try linarith
-  all_goals repeat rw [min_def]
-  all_goals split_ifs with h₁ h₂ h₃ h₃ h₂ h₃ h₃
-  all_goals try nlinarith
+theorem mem_mul_pair {xs ys : ℚInterval} {x: ℝ} (hx: x ∈ xs) {y: ℝ} (hy: y ∈ ys):
+    x * y ∈ (mul_pair xs ys) := by
+  have := NonemptyInterval.image2_subset_map₂mm (f := (· * ·)) (xs := (xs: ℝInterval)) (ys := (ys: ℝInterval)) (λ x _ ↦ (mul_right_sometone x).sometoneOn xs) (λ x _ ↦ (mul_left_sometone x).sometoneOn ys)
+  simp only [Set.subset_def, Set.forall_mem_image2] at this
+  specialize this x hx y hy
+  rw [mem_def, ← NonemptyInterval.mem_coe_interval]
+  apply Set.mem_of_mem_of_subset this
+  unfold mul_pair
+  simp only [NonemptyInterval.map₂mm_map_left, NonemptyInterval.map₂mm_map_right]
+  simp only [ OrderEmbedding.toOrderHom_coe, Rat.castOrderEmbedding_apply, ← Rat.cast_mul]
+  simp only [← Rat.castOrderEmbedding_apply, ← OrderEmbedding.toOrderHom_coe]
+  rw [←NonemptyInterval.map_map₂mm]
+  simp
 
-theorem mul_pair_ub_is_ub {x y : ℚInterval} : ∀ xv ∈ x, ∀ yv ∈ y,
-    (mul_pair x y).snd ≥ xv * yv := by
-  intro xv ⟨hxl,hxu⟩ yv ⟨hyl,hyu⟩
-  dsimp [mul_pair]
-  push_cast
-  rcases le_or_gt xv 0 with hxn|hxp
-  all_goals rcases le_or_gt (y.1.1:ℝ) 0 with hyln|hylp
-  all_goals rcases le_or_gt (y.1.2:ℝ) 0 with hyun|hyup
-  all_goals try linarith
-  all_goals repeat rw [max_def]
-  all_goals split_ifs with h₁ h₂ h₃ h₃ h₂ h₃ h₃
-  all_goals try nlinarith
+theorem mul_pair_lb_is_lb {xs ys : ℚInterval} {x: ℝ} (hx: x ∈ xs) {y: ℝ} (hy: y ∈ ys):
+    (mul_pair xs ys).fst ≤ x * y := by
+  have := mem_mul_pair hx hy
+  rw [mem_def, NonemptyInterval.mem_def] at this
+  exact this.1
 
-end slow
-
-theorem mem_mul_pair {x y : ℚInterval} : ∀ xv ∈ x, ∀ yv ∈ y, xv * yv ∈ mul_pair x y :=
-  fun _ hx _ hy ↦ ⟨mul_pair_lb_is_lb _ hx _ hy, mul_pair_ub_is_ub _ hx _ hy⟩
-
+theorem mul_pair_ub_is_ub {xs ys : ℚInterval} {x: ℝ} (hx: x ∈ xs) {y: ℝ} (hy: y ∈ ys):
+    (mul_pair xs ys).snd ≥ x * y := by
+  have := mem_mul_pair hx hy
+  rw [mem_def, NonemptyInterval.mem_def] at this
+  exact this.2
 end mul
 
 scoped instance instRatCastQInterval : RatCast ℚInterval :=
@@ -351,11 +354,11 @@ theorem lb_ub_mul_equiv (x : ComputableℝSeq) (y : ComputableℝSeq) :
 
 theorem mul_lb_is_lb (x : ComputableℝSeq) (y : ComputableℝSeq) (n : ℕ) :
     (mul_lb x y).1 n ≤ x.val * y.val :=
-  QInterval.mul_pair_lb_is_lb _ (x.val_mem_interval n) _ (y.val_mem_interval n)
+  QInterval.mul_pair_lb_is_lb (x.val_mem_interval n) (y.val_mem_interval n)
 
 theorem mul_ub_is_ub (x : ComputableℝSeq) (y : ComputableℝSeq) (n : ℕ) :
     (mul_ub x y).1 n ≥ x.val * y.val :=
-  QInterval.mul_pair_ub_is_ub _ (x.val_mem_interval n) _ (y.val_mem_interval n)
+  QInterval.mul_pair_ub_is_ub (x.val_mem_interval n) (y.val_mem_interval n)
 
 def mul (x : ComputableℝSeq) (y : ComputableℝSeq) : ComputableℝSeq where
   lub := mul' x y
@@ -366,7 +369,7 @@ def mul (x : ComputableℝSeq) (y : ComputableℝSeq) : ComputableℝSeq where
     let h₀ : Real.mk _ = x.val * y.val := by
       apply val_uniq' (mul_lb_is_lb x y) (mul_ub_is_ub x y)
       convert lb_ub_mul_equiv x y
-    h₀ ▸ QInterval.mem_mul_pair _ (x.val_mem_interval n) _ (y.val_mem_interval n)
+    h₀ ▸ QInterval.mem_mul_pair (x.val_mem_interval n) (y.val_mem_interval n)
 
 instance instComputableZero : Zero ComputableℝSeq :=
   ⟨(0 : ℕ)⟩
@@ -957,15 +960,17 @@ theorem mul_comm (x y : ComputableℝSeq) : x * y = y * x := by
     rw [← sup_assoc, ← sup_assoc]
     nth_rw 2 [sup_comm]
 
-/-TODO(mul_assoc)
-This theorem is annoying. When it's done, several other theorems follow too. They're all tagged TODO(mul_assoc).
-
+/-
 theorem mul_assoc (x y z : ComputableℝSeq) : (x * y) * z = x * (y * z) := by
   ext n
   · simp only [lb_mul, ub_mul, mul_lb, mul_ub]
+    simp
+    grind (splits := 100)
     sorry
   · sorry
+-/
 
+/-
 theorem left_distrib (x y z : ComputableℝSeq) : x * (y + z) = x * y + x * z := by
   ext n
   <;> simp only [lb_mul, ub_mul, mul_lb, mul_ub, lb_add, ub_add]

@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 package «computableReal» {
-  -- add any package configuration options here
+    leanOptions := #[⟨`experimental.module, true⟩]
 }
 
 require mathlib from git

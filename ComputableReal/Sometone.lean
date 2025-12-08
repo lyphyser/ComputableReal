@@ -26,6 +26,10 @@ variable {α β : Type*} {f : α → β} {s: Set α}
 section base
 variable [LE α] [LE β]
 
+public theorem mono {s₂: Set α} (h : SometoneOn f s) (h' : s₂ ⊆ s) : SometoneOn f s₂ := by
+  unfold SometoneOn at h ⊢
+  grind
+
 @[simp]
 public theorem dual_left : SometoneOn (f ∘ ofDual) s ↔ SometoneOn f s := by
   unfold SometoneOn

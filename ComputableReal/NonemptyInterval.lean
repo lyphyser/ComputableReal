@@ -5,6 +5,7 @@ public import Mathlib.Order.Interval.Set.UnorderedInterval
 public import Mathlib.Order.ConditionallyCompleteLattice.Defs
 public import Mathlib.Topology.Defs.Filter
 public import ComputableReal.Sometone
+public import ComputableReal.OrdClosure
 import ComputableReal.Set
 
 import Mathlib.Algebra.Order.Interval.Basic
@@ -101,9 +102,50 @@ variable {δ: Type*} [Preorder α] [Preorder β] [LinearOrder γ] [Lattice δ]
 public theorem map_map₂mm {xs : NonemptyInterval α} {ys: NonemptyInterval β} (f: α → β → γ) (g: γ →o δ): (xs.map₂mm f ys).map g = xs.map₂mm (λ x y ↦ g (f x y)) ys := by
   unfold map₂mm map
   simp
+
+lemma split_min {a b: γ} {p: γ → Prop} (h: p a) (hb: p b): p (a ⊓ b) := by
+  rw [min_def]
+  split_ifs
+  all_goals assumption
+
+lemma split_max {a b: γ} {p: γ → Prop} (h: p a) (hb: p b): p (a ⊔ b) := by
+  rw [max_def]
+  split_ifs
+  all_goals assumption
+
+public theorem map₂mm_subset_ordClosure_image2 {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β}: (map₂mm f xs ys: Set γ) ⊆ Set.ordClosure (Set.image2 f xs ys) := by
+  unfold map₂mm
+  simp only [coe_def]
+  apply Set.Icc_subset
+  all_goals
+    apply Set.mem_ordClosure_of_mem
+    repeat'
+      first
+      | apply split_min
+      | apply split_max
+    all_goals
+      simp only [Set.mem_image2, Set.mem_Icc]
+      apply Exists.intro
+      constructor
+      pick_goal 2
+      · apply Exists.intro
+        constructor
+        pick_goal 2
+        · exact Eq.refl _
+        · simp only [le_refl, fst_le_snd, and_self]
+      · simp only [le_refl, fst_le_snd, and_self]
+
+public theorem map₂mm_eq_ordClosure_image2 {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, SometoneOn (f · y) xs) (hfr: ∀ x ∈ xs, SometoneOn (f x) ys): (map₂mm f xs ys: Set γ) = Set.ordClosure (Set.image2 f xs ys) := by
+  apply Set.eq_of_subset_of_subset
+  · exact map₂mm_subset_ordClosure_image2
+  · apply Set.ordClosure_subset_ordConnected
+    · apply image2_subset_map₂mm hfl hfr
+    · rw [coe_def]
+      exact Set.ordConnected_Icc
+
 end linear
 
-section
+section cclo
 variable [ConditionallyCompleteLinearOrder α] [TopologicalSpace α] [OrderTopology α] [DenselyOrdered α]
 variable [ConditionallyCompleteLinearOrder β] [TopologicalSpace β] [OrderTopology β] [DenselyOrdered β]
 variable [LinearOrder γ] [TopologicalSpace γ] [OrderClosedTopology γ]
@@ -173,6 +215,6 @@ public theorem map₂'_eq_image2 {f: α → β → γ} {xs : NonemptyInterval α
   constructor
   · exact map₂'_subset_image2 hfcl hfl hfcr hfr
   · exact image2_subset_map₂' hfl hfr
-end
+end cclo
 
 end NonemptyInterval

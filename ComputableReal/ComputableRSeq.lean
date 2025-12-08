@@ -967,32 +967,15 @@ theorem mul_comm (x y : ComputableℝSeq) : x * y = y * x := by
 theorem mul_assoc (x y z : ComputableℝSeq) : (x * y) * z = x * (y * z) := by
   apply ext'
   intro n
-  unfold instHMul instMul mul mul' QInterval.mul_pair
-  apply NonemptyInterval.map_injective (Rat.castOrderEmbedding: ℚ ↪o ℝ)
-
-  repeat
-    simp only [NonemptyInterval.map_map₂mm]
-    simp only [OrderEmbedding.toOrderHom_coe, Rat.castOrderEmbedding_apply, Rat.cast_mul]
-    simp only [← Rat.castOrderEmbedding_apply, ← OrderEmbedding.toOrderHom_coe]
-    simp only [← NonemptyInterval.map₂mm_map_left (f := λ x y ↦ x * ((Rat.castOrderEmbedding.toOrderHom: ℚ →o ℝ) y))]
-    simp only [← NonemptyInterval.map₂mm_map_right (f := λ x y ↦ x * y)]
-
+  unfold HMul.hMul instHMul Mul.mul instMul mul mul' QInterval.mul_pair
   apply NonemptyInterval.coeHom.injective
-  simp only [NonemptyInterval.coe_coeHom]
-  have := λ xs ys ↦ NonemptyInterval.map₂mm_eq_image2 (α := ℝ) (β := ℝ) (γ := ℝ) (f := (· * ·)) (xs := xs) (ys := ys) (by
-    intro x hx
-    apply Continuous.continuousOn
-    apply mulRight_continuous) (by
-    intro x hx
-    apply Sometone.sometoneOn
-    apply mul_right_sometone) (by
-    intro x hx
-    apply Continuous.continuousOn
-    apply mulLeft_continuous) (by
-    intro x hx
-    apply Sometone.sometoneOn
-    apply mul_left_sometone)
-  simp only [this]
+  have hfr := λ {s: Set ℚ} {t: Set ℚ} x (_: x ∈ s) ↦ (mul_left_sometone x).sometoneOn t
+  have hfl := λ {s: Set ℚ} {t: Set ℚ} y (_: y ∈ t) ↦ (mul_right_sometone y).sometoneOn s
+  simp only [NonemptyInterval.coe_coeHom, ← NonemptyInterval.coe_def,
+    NonemptyInterval.map₂mm_eq_ordClosure_image2 hfl hfr,
+    Set.ordClosure_image2_ordClosure_left_eq hfr,
+    Set.ordClosure_image2_ordClosure_right_eq hfl]
+  congr 1
   apply Set.image2_assoc
   exact _root_.mul_assoc
 

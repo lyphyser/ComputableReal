@@ -1039,7 +1039,7 @@ class CompSeqClass (G : Type u) extends
 -/
 
 class CompSeqClass (G : Type u) extends
-  AddCommMonoid G, CommMagma G, MulZeroOneClass G, Inv G, Div G,
+  AddCommMonoid G, CommMonoidWithZero G, DivInvMonoid G,
   HasDistribNeg G, SubtractionCommMonoid G, NatCast G, IntCast G, RatCast G
 
 instance instSeqCompSeqClass : CompSeqClass ComputableℝSeq := by
@@ -1063,9 +1063,8 @@ instance instSeqCompSeqClass : CompSeqClass ComputableℝSeq := by
             neg_mul := neg_mul
             mul_neg := mul_neg
             neg_eq_of_add := neg_eq_of_add
-
-            -- mul_assoc := mul_assoc
-            -- npow := @npowRec _ ⟨(1 : ℕ)⟩ ⟨(· * ·)⟩
+            mul_assoc := mul_assoc
+            npow := @npowRec _ ⟨(1 : ℕ)⟩ ⟨(· * ·)⟩
             -- left_distrib := left_distrib
             -- right_distrib := right_distrib
             -- zpow := zpowRec

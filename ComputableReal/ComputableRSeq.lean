@@ -1,5 +1,7 @@
 import Mathlib.Order.Interval.Basic
 import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.CauSeq.Basic
+import Mathlib.Algebra.Order.CauSeq.BigOperators
 import Mathlib.Data.Real.Archimedean
 import Mathlib.Data.Sign.Defs
 import Mathlib.Tactic.Rify
@@ -979,20 +981,8 @@ theorem mul_assoc (x y z : ComputableℝSeq) : (x * y) * z = x * (y * z) := by
   apply Set.image2_assoc
   exact _root_.mul_assoc
 
-/-
-theorem left_distrib (x y z : ComputableℝSeq) : x * (y + z) = x * y + x * z := by
-  ext n
-  <;> simp only [lb_mul, ub_mul, mul_lb, mul_ub, lb_add, ub_add]
-  · dsimp
-    simp only [_root_.left_distrib, add_inf, inf_add, inf_assoc]
-    -- congr 1
-    repeat sorry
-  · sorry
-
-theorem right_distrib (x y z : ComputableℝSeq) : (x + y) * z = x * z + y * z := by
-  rw [mul_comm, left_distrib, mul_comm, mul_comm z y]
-
--/
+--theorem val_eq_of_subset {x y: ComputableℝSeq} (h: ∀ n, x.lub n ⊆ y.lub n): x.val = y.val := by
+--  sorry
 
 theorem neg_mul (x y : ComputableℝSeq) : -x * y = -(x * y) := by
   ext
@@ -1095,6 +1085,101 @@ theorem val_natpow (x : ComputableℝSeq) (n : ℕ): (x ^ n).val = x.val ^ n := 
   · rename_i ih
     rw [pow_succ, pow_succ, val_mul, ih]
 -/
+
+def isCauSeq_inv_n: IsCauSeq abs λ n ↦ (n+1:ℚ)⁻¹ := by
+  apply IsCauSeq.of_decreasing_bounded (a := 1) (m := 0)
+  all_goals
+    intro n hn
+    try simp only [abs_inv]
+    field_simp
+    norm_cast
+    grind
+
+def limZero_cauSeq_inv_n: CauSeq.LimZero ⟨λ n ↦ (n+1:ℚ)⁻¹, isCauSeq_inv_n⟩ := by
+  unfold CauSeq.LimZero
+  intro ε hε
+  use ⌊ε⁻¹⌋.toNat
+  intro j hj
+  simp only [abs_inv]
+  field_simp
+  simp only [ge_iff_le, Int.toNat_le, Int.floor_le_iff, Int.cast_natCast] at hj
+  field_simp at hj
+  norm_cast
+  grind
+
+def real_cauSeq_neg_inv_n_eq_zero := by
+  have hp := limZero_cauSeq_inv_n
+  have hn := CauSeq.neg_limZero hp
+  have h0: CauSeq.LimZero (CauSeq.const abs (0: ℚ)) :=
+    CauSeq.const_limZero.mpr rfl
+  have hv :=  Real.mk_eq.mpr (CauSeq.sub_limZero hn h0)
+  rw [Neg.neg, CauSeq.instNeg] at hv
+  simp only [Pi.neg_def, CauSeq.const_zero, Real.mk_zero] at hv
+  exact hv
+
+def thickZero: ComputableℝSeq where
+  lub n := ⟨⟨-(n+1:ℚ)⁻¹, (n+1:ℚ)⁻¹⟩, (by field_simp; decide)⟩
+  hcu := isCauSeq_inv_n
+  hcl := by
+    apply IsCauSeq.of_neg
+    simp only [Pi.neg_def, neg_neg]
+    apply isCauSeq_inv_n
+  hlub := by
+    intro n
+    rw [real_cauSeq_neg_inv_n_eq_zero]
+    simp
+    norm_cast
+    grind
+  heq' := by
+    have hp := limZero_cauSeq_inv_n
+    have hn := CauSeq.neg_limZero hp
+    exact CauSeq.sub_limZero hn hp
+
+lemma val_thickZero: thickZero.val = 0 := by
+  rw [ComputableℝSeq.val, thickZero, lb]
+  rw [real_cauSeq_neg_inv_n_eq_zero]
+
+theorem not_left_distrib: ¬((x y z : ComputableℝSeq) → x * (y + z) = x * y + x * z) := by
+  let x := thickZero
+  let y := (1: ComputableℝSeq)
+  let z := (-1: ComputableℝSeq)
+
+  have hyz: y + z = 0 := by
+    simp [y, z]
+    apply ext'
+    intro n
+    have: lub 0 n = 0 := by rfl
+    rw [this]
+    have: lub ((1: ComputableℝSeq) + -(1: ComputableℝSeq)) n = 1 + (-1) := by rfl
+    rw [this]
+    ext
+    · simp
+    · simp
+
+  simp only [not_forall]
+  use x, y, z
+  simp only [hyz]
+  simp [x, y, z]
+  unfold thickZero
+  intro h
+  apply_fun (λ x ↦ (x.lub 0).fst) at h
+  have: (lub 0) 0 = 0 := by rfl
+  rw [this, HAdd.hAdd, instHAdd, Add.add, instAdd] at h
+  simp_rw [Neg.neg, neg] at h
+  simp [add, mk] at h
+  have: Rat.neg 1 = -1 := rfl
+  rw [this] at h
+  try norm_cast at h
+
+theorem not_right_distrib: ¬((x y z : ComputableℝSeq) → (y + z) * x = y * x + z * x) := by
+  intro h
+  apply not_left_distrib
+  intro x y z
+  specialize h x y z
+  nth_rw 1 [mul_comm]
+  nth_rw 2 [mul_comm]
+  nth_rw 3 [mul_comm]
+  exact h
 
 end semiring
 

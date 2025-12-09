@@ -2,6 +2,7 @@ module
 
 public import Mathlib.Order.Interval.Basic
 public import Mathlib.Order.Interval.Set.UnorderedInterval
+public import Mathlib.Algebra.Order.Interval.Basic
 public import Mathlib.Order.ConditionallyCompleteLattice.Defs
 public import Mathlib.Topology.Defs.Filter
 public import ComputableReal.Sometone
@@ -32,6 +33,15 @@ public lemma fst_mem (x: NonemptyInterval α): x.fst ∈ x := by
 public lemma snd_mem (x: NonemptyInterval α): x.snd ∈ x := by
   exact ⟨NonemptyInterval.fst_le_snd x, IsRefl.refl _⟩
 end refl
+
+section base
+variable [Preorder α] [Preorder β] [Preorder γ]
+public def map₂' {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfr: ∀ x ∈ xs, MonotoneOn (f x) ys) (hfl: ∀ y ∈ ys, MonotoneOn (f · y) xs): NonemptyInterval γ :=
+  ⟨⟨f xs.fst ys.fst, f xs.snd ys.snd⟩, by
+    have h1 := hfl ys.fst ys.fst_mem xs.fst_mem xs.snd_mem xs.fst_le_snd
+    have h2 := hfr xs.snd xs.snd_mem ys.fst_mem ys.snd_mem ys.fst_le_snd
+    exact le_trans h1 h2⟩
+end base
 
 section lattice
 variable [LE α] [LE β] [Lattice γ]
@@ -67,12 +77,6 @@ public theorem image2_subset_map₂mm {f: α → β → γ} {xs : NonemptyInterv
   · apply Set.mem_of_mem_of_subset (SometoneOn.mapsTo_uIcc (hfr xs.snd xs.snd_mem) hy)
     rw [Set.uIcc_subset_Icc_iff_mem]
     grind [inf_le_of_left_le, inf_le_of_right_le, le_sup_of_le_left, le_sup_of_le_right]
-
-public def map₂' {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, MonotoneOn (f · y) xs) (hfr: ∀ x ∈ xs, MonotoneOn (f x) ys): NonemptyInterval γ :=
-  ⟨⟨f xs.fst ys.fst, f xs.snd ys.snd⟩, by
-    have h1 := hfl ys.fst ys.fst_mem xs.fst_mem xs.snd_mem xs.fst_le_snd
-    have h2 := hfr xs.snd xs.snd_mem ys.fst_mem ys.snd_mem ys.fst_le_snd
-    exact le_trans h1 h2⟩
 
 public theorem map₂'_eq_map₂mm {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, MonotoneOn (f · y) xs) (hfr: ∀ x ∈ xs, MonotoneOn (f x) ys): map₂' hfl hfr = map₂mm f xs ys := by
   unfold map₂' map₂mm
@@ -143,7 +147,35 @@ public theorem map₂mm_eq_ordClosure_image2 {f: α → β → γ} {xs : Nonempt
     · rw [coe_def]
       exact Set.ordConnected_Icc
 
+public theorem map₂'_subset_ordClosure_image2 {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, MonotoneOn (f · y) xs) (hfr: ∀ x ∈ xs, MonotoneOn (f x) ys): (map₂' hfl hfr: Set γ) ⊆ Set.ordClosure (Set.image2 f xs ys) := by
+  rw [map₂'_eq_map₂mm hfl hfr]
+  exact map₂mm_subset_ordClosure_image2 (α := α) (β := β) (γ := γ)
+
+public theorem map₂'_eq_ordClosure_image2 {f: α → β → γ} {xs : NonemptyInterval α} {ys: NonemptyInterval β} (hfl: ∀ y ∈ ys, MonotoneOn (f · y) xs) (hfr: ∀ x ∈ xs, MonotoneOn (f x) ys): (map₂' hfl hfr: Set γ) = Set.ordClosure (Set.image2 f xs ys) := by
+  apply Set.eq_of_subset_of_subset
+  · exact map₂'_subset_ordClosure_image2 hfl hfr
+  · apply Set.ordClosure_subset_ordConnected
+    · exact image2_subset_map₂' hfl hfr
+    · rw [coe_def]
+      exact Set.ordConnected_Icc
 end linear
+
+section algebra
+variable [Preorder α] [Add α] [AddLeftMono α] [AddRightMono α]
+
+public theorem add_eq_map₂'_add (xs: NonemptyInterval α) (ys: NonemptyInterval α):
+  let hfr := λ y (_: y ∈ ys) ↦ (add_left_mono (a := y)).monotoneOn xs
+  let hfl := λ x (_: x ∈ xs) ↦ (add_right_mono (a := x)).monotoneOn ys
+  ((xs + ys): NonemptyInterval α) = map₂' hfr hfl := by
+  unfold map₂'
+  dsimp
+  rw [← Add.add_eq_hAdd]
+  unfold Add.add instAddNonemptyInterval
+  simp only [Prod.add_def]
+
+
+
+end algebra
 
 section cclo
 variable [ConditionallyCompleteLinearOrder α] [TopologicalSpace α] [OrderTopology α] [DenselyOrdered α]
@@ -216,5 +248,40 @@ public theorem map₂'_eq_image2 {f: α → β → γ} {xs : NonemptyInterval α
   · exact map₂'_subset_image2 hfcl hfl hfcr hfr
   · exact image2_subset_map₂' hfl hfr
 end cclo
+
+/-
+theorem left_distrib (x y z : NonemptyInterval α) : x * (y + z) ⊆ x * y + x * z := by
+  unfold HMul.hMul instHMul Mul.mul instMul mul mul' QInterval.mul_pair
+  dsimp
+  unfold HAdd.hAdd instHAdd Add.add instAdd add mk
+  dsimp
+  apply NonemptyInterval.coeHom.injective
+  have hfr := λ {s: Set ℚ} {t: Set ℚ} x (_: x ∈ s) ↦ (mul_left_sometone x).sometoneOn t
+  have hfl := λ {s: Set ℚ} {t: Set ℚ} y (_: y ∈ t) ↦ (mul_right_sometone y).sometoneOn s
+  have har := λ {s: Set ℚ} {t: Set ℚ} x (_: x ∈ s) ↦ SometoneOn.of_MonotoneOn ((add_left_mono (a := x)).monotoneOn t)
+  have hal := λ {s: Set ℚ} {t: Set ℚ} y (_: y ∈ t) ↦ SometoneOn.of_MonotoneOn ((add_right_mono (a := y)).monotoneOn s)
+  simp only [NonemptyInterval.coe_coeHom, ← NonemptyInterval.coe_def,
+    NonemptyInterval.add_eq_map₂'_add,
+    NonemptyInterval.map₂'_eq_ordClosure_image2,
+    NonemptyInterval.map₂mm_eq_ordClosure_image2 hfl hfr,
+    Set.ordClosure_image2_ordClosure_left_eq hfr,
+    Set.ordClosure_image2_ordClosure_left_eq hal,
+    Set.ordClosure_image2_ordClosure_right_eq har]
+  apply Set.eq_of_subset_of_subset
+  · apply Set.ordClosure.mono
+    apply Set.image2_distrib_subset_left
+    apply mul_add
+  · -- 1 * x1 + (-1) * x2
+    -- [0, 1]
+    -- => [-1, 1]
+    -- not distrib!!
+    -- (1 + (-1)) * [0, 1]
+    --
+    sorry
+
+theorem right_distrib (x y z : ComputableℝSeq) : (x + y) * z = x * z + y * z := by
+  rw [mul_comm, left_distrib, mul_comm, mul_comm z y]
+
+-/
 
 end NonemptyInterval

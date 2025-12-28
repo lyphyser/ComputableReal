@@ -1,6 +1,5 @@
-module
-public import ComputableReal.ComputableRSeq
-public import ComputableReal.ComputableReal
-public import ComputableReal.IsComputable
-public import ComputableReal.IsComputableC
-public import ComputableReal.SpecialFunctions
+import ComputableReal.ComputableRSeq
+import ComputableReal.ComputableReal
+import ComputableReal.IsComputable
+import ComputableReal.IsComputableC
+import ComputableReal.SpecialFunctions

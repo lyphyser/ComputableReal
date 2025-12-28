@@ -323,7 +323,7 @@ theorem mkRat_sub_le_sqrt (q : ℚ) (n : ℕ) :
 
   constructor
   · ring_nf
-    rw [mul_assoc, mul_assoc _ _ 3, mul_le_mul_iff_of_pos_left (by positivity)]
+    rw [_root_.mul_assoc, _root_.mul_assoc _ _ 3, mul_le_mul_iff_of_pos_left (by positivity)]
     apply mul_le_of_le_one_of_le' h₂.le _ (by positivity) (by positivity)
     rw [inv_pow]
     field_simp

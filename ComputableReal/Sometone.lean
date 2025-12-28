@@ -211,28 +211,44 @@ end linear
 end Sometone
 
 section mul
-variable {α: Type*} [Semiring α] [LinearOrder α] [PosMulMono α] [AddRightMono α] [AddRightReflectLE α] [ExistsAddOfLE α]
+variable {α: Type*} [NonUnitalNonAssocSemiring α] [LinearOrder α] [AddRightMono α] [AddRightReflectLE α] [ExistsAddOfLE α]
+
+-- these replace the Semiring requirement with just [NonUnitalNonAssocSemiring
+theorem mul_le_mul_of_nonpos_left' {a b c: α} [PosMulMono α]
+    (h : b ≤ a) (hc : c ≤ 0) : c * a ≤ c * b := by
+  obtain ⟨d, hcd⟩ := exists_add_of_le hc
+  refine le_of_add_le_add_right (a := d * b + d * a) ?_
+  calc
+    _ = d * b := by rw [add_left_comm, ← add_mul, ← hcd, zero_mul, add_zero]
+    _ ≤ d * a := by apply PosMulMono.mul_le_mul_of_nonneg_left ?_ h; exact hcd.trans_le <| add_le_of_nonpos_left hc
+    _ = _ := by rw [← add_assoc, ← add_mul, ← hcd, zero_mul, zero_add]
+
+theorem mul_le_mul_of_nonpos_right' {a b c: α} [MulPosMono α]
+    (h : b ≤ a) (hc : c ≤ 0) : a * c ≤ b * c := by
+  obtain ⟨d, hcd⟩ := exists_add_of_le hc
+  refine le_of_add_le_add_right (a := b * d + a * d) ?_
+  calc
+    _ = b * d := by rw [add_left_comm, ← mul_add, ← hcd, mul_zero, add_zero]
+    _ ≤ a * d := by apply MulPosMono.mul_le_mul_of_nonneg_right ?_ h; exact hcd.trans_le <| add_le_of_nonpos_left hc
+    _ = _ := by rw [← add_assoc, ← mul_add, ← hcd, mul_zero, zero_add]
+
 public def mul_left_sometone [PosMulMono α] (x: α): Sometone (x * ·) := by
   if h: 0 ≤ x then
     apply Sometone.of_Monotone
-    apply monotone_iff_forall_lt.mpr
     intro y z hyz
-    exact mul_le_mul_of_nonneg_left (le_of_lt hyz) h
+    exact mul_le_mul_of_nonneg_left hyz h
   else
     apply Sometone.of_Antitone
-    apply antitone_iff_forall_lt.mpr
     intro y z hyz
-    exact mul_le_mul_of_nonpos_left (le_of_lt hyz) (le_of_lt (not_le.mp h))
+    exact mul_le_mul_of_nonpos_left' hyz (le_of_lt (not_le.mp h))
 
 public def mul_right_sometone [MulPosMono α] (x: α): Sometone (· * x) := by
   if h: 0 ≤ x then
     apply Sometone.of_Monotone
-    apply monotone_iff_forall_lt.mpr
     intro y z hyz
-    exact mul_le_mul_of_nonneg_right (le_of_lt hyz) h
+    exact mul_le_mul_of_nonneg_right hyz h
   else
     apply Sometone.of_Antitone
-    apply antitone_iff_forall_lt.mpr
     intro y z hyz
-    exact mul_le_mul_of_nonpos_right (le_of_lt hyz) (le_of_lt (not_le.mp h))
+    exact mul_le_mul_of_nonpos_right' hyz (le_of_lt (not_le.mp h))
 end mul

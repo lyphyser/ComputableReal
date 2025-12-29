@@ -37,11 +37,10 @@ PROJECT_MCP_CONFIG="$PROJECT_PATH/.claude/mcp.json"
 
 if [ -f "$CLAUDE_CONFIG" ] && [ -f "$PROJECT_MCP_CONFIG" ]; then
   if command -v jq &> /dev/null; then
-    # Read MCP servers from project config and merge into home config
+    # Read MCP servers from project config and merge into root level mcpServers
     TMP_FILE=$(mktemp)
-    jq --arg project "$PROJECT_PATH" \
-       --slurpfile mcp "$PROJECT_MCP_CONFIG" \
-       '.projects[$project].mcpServers = $mcp[0].mcpServers' \
+    jq --slurpfile mcp "$PROJECT_MCP_CONFIG" \
+       '.mcpServers = ($mcp[0].mcpServers // {})' \
        "$CLAUDE_CONFIG" > "$TMP_FILE" && mv "$TMP_FILE" "$CLAUDE_CONFIG"
     echo "MCP servers configured from .claude/mcp.json"
   else

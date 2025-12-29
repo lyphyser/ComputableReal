@@ -49,9 +49,9 @@ instance instComputableOfNat0 : IsComputable
 
 instance instComputableOfNatAtLeastTwo : (n : ℕ) → [n.AtLeastTwo] → IsComputable ofNat(n) :=
   fun _ _ ↦ ⟨
-    ⟨fun _ ↦ ⟨⟨_, _⟩, rfl.le⟩,
+    ⟨fun _ ↦ (_, _),
       IsCauSeq.const _, IsCauSeq.const _,
-      fun _ ↦ by simpa using ⟨rfl.le, rfl.le⟩,
+      fun _ _ => rfl.le,
       by rfl⟩,
     ComputableℝSeq.val_eq_mk_lb _⟩
 
@@ -235,7 +235,7 @@ def of_TendstoLocallyUniformly_Continuous
     (x : ComputableℝSeq) : ComputableℝSeq :=
   mk
   (x := f x.val)
-  (lub := fun n ↦ fImpl n (x.lub n))
+  (lub := fun n ↦ (fImpl n (x.lub_int n)).toProd)
   (hcl := by
     obtain ⟨w, _⟩ := Real_mk_of_TendstoLocallyUniformly' fImpl_l f hTLU_l hf x.lb
     simp_rw [hImplDef]
@@ -246,8 +246,8 @@ def of_TendstoLocallyUniformly_Continuous
     simp_rw [hImplDef]
     exact w
   )
-  (hlb := fun n ↦ by simp_rw [hImplDef]; exact hlb n (x.lub n) x.val ⟨x.hlb n, x.hub n⟩)
-  (hub := fun n ↦ by simp_rw [hImplDef]; exact hub n (x.lub n) x.val ⟨x.hlb n, x.hub n⟩)
+  (hlb := fun n ↦ by simp_rw [hImplDef]; exact hlb n (x.lub_int n) x.val ⟨x.hlb n, x.hub n⟩)
+  (hub := fun n ↦ by simp_rw [hImplDef]; exact hub n (x.lub_int n) x.val ⟨x.hlb n, x.hub n⟩)
   (heq := by
     obtain ⟨_, h₁⟩ := Real_mk_of_TendstoLocallyUniformly' fImpl_l f hTLU_l hf x.lb
     obtain ⟨_, h₂⟩ := Real_mk_of_TendstoLocallyUniformly' fImpl_u f hTLU_u hf x.ub

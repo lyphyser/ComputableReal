@@ -29,28 +29,24 @@ fi
 
 echo "Lean environment setup complete!"
 
-# Enable lean-lsp MCP server in Claude config
-echo "Enabling lean-lsp MCP server in Claude config..."
+# Add MCP servers from .claude/mcp.json to home directory config
+echo "Configuring MCP servers..."
 CLAUDE_CONFIG="$HOME/.claude.json"
 PROJECT_PATH="/home/user/ComputableReal"
+PROJECT_MCP_CONFIG="$PROJECT_PATH/.claude/mcp.json"
 
-if [ -f "$CLAUDE_CONFIG" ]; then
-  # Check if jq is available
+if [ -f "$CLAUDE_CONFIG" ] && [ -f "$PROJECT_MCP_CONFIG" ]; then
   if command -v jq &> /dev/null; then
-    # Use jq to add lean-lsp to enabledMcpjsonServers if not already present
+    # Read MCP servers from project config and merge into root level mcpServers
     TMP_FILE=$(mktemp)
-    jq --arg project "$PROJECT_PATH" \
-      '.projects[$project].enabledMcpjsonServers |=
-       if . then
-         if contains(["lean-lsp"]) then . else . + ["lean-lsp"] end
-       else
-         ["lean-lsp"]
-       end' \
-      "$CLAUDE_CONFIG" > "$TMP_FILE" && mv "$TMP_FILE" "$CLAUDE_CONFIG"
-    echo "lean-lsp MCP server enabled in Claude config"
+    jq --slurpfile mcp "$PROJECT_MCP_CONFIG" \
+       '.mcpServers = ($mcp[0].mcpServers // {})' \
+       "$CLAUDE_CONFIG" > "$TMP_FILE" && mv "$TMP_FILE" "$CLAUDE_CONFIG"
+    echo "MCP servers configured from .claude/mcp.json"
   else
-    echo "Warning: jq not found, skipping Claude config update"
+    echo "Warning: jq not found, skipping MCP server configuration"
   fi
 else
-  echo "Warning: Claude config not found at $CLAUDE_CONFIG"
+  [ ! -f "$CLAUDE_CONFIG" ] && echo "Warning: Claude config not found at $CLAUDE_CONFIG"
+  [ ! -f "$PROJECT_MCP_CONFIG" ] && echo "Warning: Project MCP config not found at $PROJECT_MCP_CONFIG"
 fi

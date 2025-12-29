@@ -28,3 +28,29 @@ if ! lake exe cache get 2>&1 | grep -q "Completed successfully"; then
 fi
 
 echo "Lean environment setup complete!"
+
+# Enable lean-lsp MCP server in Claude config
+echo "Enabling lean-lsp MCP server in Claude config..."
+CLAUDE_CONFIG="$HOME/.claude.json"
+PROJECT_PATH="/home/user/ComputableReal"
+
+if [ -f "$CLAUDE_CONFIG" ]; then
+  # Check if jq is available
+  if command -v jq &> /dev/null; then
+    # Use jq to add lean-lsp to enabledMcpjsonServers if not already present
+    TMP_FILE=$(mktemp)
+    jq --arg project "$PROJECT_PATH" \
+      '.projects[$project].enabledMcpjsonServers |=
+       if . then
+         if contains(["lean-lsp"]) then . else . + ["lean-lsp"] end
+       else
+         ["lean-lsp"]
+       end' \
+      "$CLAUDE_CONFIG" > "$TMP_FILE" && mv "$TMP_FILE" "$CLAUDE_CONFIG"
+    echo "lean-lsp MCP server enabled in Claude config"
+  else
+    echo "Warning: jq not found, skipping Claude config update"
+  fi
+else
+  echo "Warning: Claude config not found at $CLAUDE_CONFIG"
+fi

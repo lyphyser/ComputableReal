@@ -99,8 +99,7 @@ structure ComputableℝSeq where
   lub : ℕ → NonemptyInterval ℚ
   hcl : IsCauSeq abs fun n ↦ (lub n).fst
   hcu : IsCauSeq abs fun n ↦ (lub n).snd
-  hlub : ∀n, (lub n).fst ≤ (Real.mk ⟨fun n ↦ (lub n).fst, hcl⟩) ∧
-    (lub n).snd ≥ (Real.mk ⟨fun n ↦ (lub n).fst, hcl⟩)
+  hlub : ∀ i j, (lub i).fst ≤ (lub j).snd
   heq' : let lb : CauSeq ℚ abs := ⟨fun n ↦ (lub n).fst, hcl⟩
         let ub : CauSeq ℚ abs := ⟨fun n ↦ (lub n).snd, hcu⟩
         lb ≈ ub
@@ -129,11 +128,70 @@ theorem val_eq_mk_lb (x : ComputableℝSeq) : x.val = Real.mk x.lb :=
 theorem val_eq_mk_ub (x : ComputableℝSeq) : x.val = Real.mk x.ub :=
   x.val_eq_mk_lb.trans x.lb_eq_ub
 
+/-- The old form of hlub: lb n and ub n bound the value.
+    This follows from the new hlub using sup/inf arguments. -/
+theorem hlub_val (x : ComputableℝSeq) : ∀n, x.lb n ≤ x.val ∧ x.ub n ≥ x.val := by
+  intro n
+  -- Strategy: lb n ≤ sup lb ≤ inf ub ≤ ub n, where sup lb = inf ub = lim lb = lim ub = val
+
+  let sup_lb : ℝ := ⨆ i, (x.lb i : ℝ)
+  let inf_ub : ℝ := ⨅ i, (x.ub i : ℝ)
+
+  have lb_bdd : BddAbove (Set.range fun i => (x.lb i : ℝ)) := by
+    use (x.ub 0 : ℝ)
+    rintro _ ⟨k, rfl⟩
+    exact Rat.cast_le.mpr (x.hlub k 0)
+
+  have ub_bdd : BddBelow (Set.range fun i => (x.ub i : ℝ)) := by
+    use (x.lb 0 : ℝ)
+    rintro _ ⟨k, rfl⟩
+    exact Rat.cast_le.mpr (x.hlub 0 k)
+
+  have lb_le_sup : ∀ i, (x.lb i : ℝ) ≤ sup_lb :=
+    le_ciSup lb_bdd
+
+  have inf_le_ub : ∀ i, inf_ub ≤ (x.ub i : ℝ) :=
+    ciInf_le ub_bdd
+
+  have lim_lb_le_sup : Real.mk x.lb ≤ sup_lb := by
+    apply Real.mk_le_of_forall_le ⟨0, fun j _ => lb_le_sup j⟩
+
+  have sup_le_inf : sup_lb ≤ inf_ub := by
+    apply ciSup_le
+    intro i
+    apply le_ciInf
+    intro j
+    exact Rat.cast_le.mpr (x.hlub i j)
+
+  have inf_le_lim_ub : inf_ub ≤ Real.mk x.ub := by
+    apply Real.le_mk_of_forall_le ⟨0, fun j _ => inf_le_ub j⟩
+
+  have lim_eq : Real.mk x.lb = Real.mk x.ub := lb_eq_ub x
+
+  have lim_eq_sup : Real.mk x.lb = sup_lb := by
+    apply le_antisymm lim_lb_le_sup
+    rw [lim_eq]
+    calc sup_lb ≤ inf_ub := sup_le_inf
+      _ ≤ Real.mk x.ub := inf_le_lim_ub
+
+  have inf_eq_lim : inf_ub = Real.mk x.ub := by
+    apply le_antisymm inf_le_lim_ub
+    rw [← lim_eq]
+    calc Real.mk x.lb ≤ sup_lb := lim_lb_le_sup
+      _ ≤ inf_ub := sup_le_inf
+
+  rw [val_eq_mk_lb]
+  exact ⟨by calc (x.lb n : ℝ) ≤ sup_lb := lb_le_sup n
+          _ = Real.mk x.lb := lim_eq_sup.symm,
+        by calc (x.ub n : ℝ) ≥ inf_ub := inf_le_ub n
+          _ = Real.mk x.ub := inf_eq_lim
+          _ = Real.mk x.lb := lim_eq.symm⟩
+
 theorem hlb (x : ComputableℝSeq) : ∀n, x.lb n ≤ x.val :=
-  fun n ↦ val_eq_mk_lb _ ▸ (x.hlub n).1
+  fun n ↦ (x.hlub_val n).1
 
 theorem hub (x : ComputableℝSeq) : ∀n, x.ub n ≥ x.val :=
-  fun n ↦ val_eq_mk_lb _ ▸ (x.hlub n).2
+  fun n ↦ (x.hlub_val n).2
 
 theorem val_mem_interval (x : ComputableℝSeq) : ∀n, x.val ∈ x.lub n :=
   fun n ↦ ⟨x.hlb n, x.hub n⟩
@@ -170,9 +228,7 @@ def mk (x : ℝ) (lub : ℕ → ℚInterval)
   hcl := hcl
   hcu := hcu
   heq' := heq
-  hlub n := by
-    rw [val_uniq' hlb hub heq]
-    exact ⟨hlb n, hub n⟩
+  hlub i j := Rat.cast_le.mp (le_trans (hlb i) (hub j))
 
 theorem mk_val_eq_val : (mk x v h₁ h₂ h₃ h₄ h₅).val = x :=
   val_uniq (by convert h₃) (by convert h₄)
@@ -371,11 +427,7 @@ def mul (x : ComputableℝSeq) (y : ComputableℝSeq) : ComputableℝSeq where
   hcl := mul'_fst_iscau
   hcu := mul'_snd_iscau
   heq' := by convert lb_ub_mul_equiv x y
-  hlub n :=
-    let h₀ : Real.mk _ = x.val * y.val := by
-      apply val_uniq' (mul_lb_is_lb x y) (mul_ub_is_ub x y)
-      convert lb_ub_mul_equiv x y
-    h₀ ▸ QInterval.mem_mul_pair (x.val_mem_interval n) (y.val_mem_interval n)
+  hlub i j := Rat.cast_le.mp (le_trans (mul_lb_is_lb x y i) (mul_ub_is_ub x y j))
 
 instance instComputableZero : Zero ComputableℝSeq :=
   ⟨(0 : ℕ)⟩
@@ -1124,12 +1176,12 @@ def thickZero: ComputableℝSeq where
     apply IsCauSeq.of_neg
     simp only [Pi.neg_def, neg_neg]
     apply isCauSeq_inv_n
-  hlub := by
-    intro n
-    rw [real_cauSeq_neg_inv_n_eq_zero]
+  hlub i j := by
     simp
-    norm_cast
-    grind
+    apply le_trans
+    · apply neg_nonpos_of_nonneg
+      positivity
+    · positivity
   heq' := by
     have hp := limZero_cauSeq_inv_n
     have hn := CauSeq.neg_limZero hp

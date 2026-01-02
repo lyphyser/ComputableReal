@@ -8,16 +8,15 @@ import Batteries.Data.Vector
 import Std.Data.HashMap
 import Std.Data.DHashMap
 import Std.Data.HashSet
-import Batteries.Data.RBMap
 
 /-- Type class for codes that can be decoded into a Type -/
 class ToType (α : Type) where
   toType : α → Type
   isHash : α → Bool
   isOrd : α → Bool
-  instHash : ∀ x, isHash x → Hashable (toType x)
-  instBEq : ∀ x, (isHash x || isOrd x) → BEq (toType x)
-  instOrd : ∀ x, isOrd x → Ord (toType x)
+  instHash : ∀ x, isHash x = true → Hashable (toType x)
+  instBEq : ∀ x, (isHash x = true ∨ isOrd x = true) → BEq (toType x)
+  instOrd : ∀ x, isOrd x = true → Ord (toType x)
 
 export ToType (toType isHash isOrd instHash instBEq instOrd)
 
@@ -64,8 +63,7 @@ instance [Ord α] {p : α → Prop} : Ord { x // p x } where
 instance [BEq α] {p : α → Prop} : BEq { x // p x } where
   beq x y := x.val == y.val
 
-abbrev Squash (α : Type u) := Quot (fun (_ _ : α) => True)
-
+-- Squash is already defined in Mathlib
 instance : Hashable (Squash α) where hash _ := 0
 instance : BEq (Squash α) where beq _ _ := true
 instance : Ord (Squash α) where compare _ _ := .eq
@@ -115,10 +113,10 @@ inductive XTy (P : Type) [ToType P] : Bool → Bool → Type where
 | squash {h o} (x : XTy P h o) : XTy P true true
 | subtype {h o} (x : P) (p : toType x → Prop) : XTy P (isHash x && h) (isOrd x && o)
 | hashmap {hv ov} (k : XTy P true ok) (v : XTy P hv ov) : XTy P false false
-| dhashmap (k : P) (v : toType k → XTy P false false) : XTy P false false
+| dhashmap (k : P) (hk : isHash k = true) (v : toType k → XTy P false false) : XTy P false false
 | hashset (k : XTy P true ok) : XTy P false false
 | treemap {hv ov} (k : XTy P hk true) (v : XTy P hv ov) : XTy P false false
-| dtreemap (k : P) (v : toType k → XTy P false false) : XTy P false false
+| dtreemap (k : P) (ok : isOrd k = true) (v : toType k → XTy P false false) : XTy P false false
 | treeset (k : XTy P hk true) : XTy P false false
 | f {h1 o1 h2 o2} (x : XTy P h1 o1) (y : XTy P h2 o2) : XTy P false false
 | sigma (x : P) (y : toType x → XTy P false false) : XTy P false false
@@ -128,9 +126,9 @@ inductive XTy (P : Type) [ToType P] : Bool → Bool → Type where
 
 structure Decoded (h o : Bool) where
   type : Type
-  hInst : if h then Hashable type else Unit
-  oInst : if o then Ord type else Unit
-  bInst : if h || o then BEq type else Unit
+  hInst : h = true → Hashable type
+  oInst : o = true → Ord type
+  bInst : h = true ∨ o = true → BEq type
 
 -- Helper lemmas
 lemma cond_implies_left {h1 h2 o1 o2 : Bool} (cond : (h1 && h2) || (o1 && o2)) : h1 || o1 := by
@@ -142,296 +140,287 @@ lemma cond_implies_right {h1 h2 o1 o2 : Bool} (cond : (h1 && h2) || (o1 && o2)) 
 lemma cond_implies_subtype {h o : Bool} {isHashX isOrdX : Bool} (cond : isHashX && h || isOrdX && o) : isHashX || isOrdX := by
   cases isHashX <;> cases isOrdX <;> cases h <;> cases o <;> simp_all
 
+lemma or_to_bool_or {a b : Bool} (h : a = true ∨ b = true) : (a || b) = true := by
+  cases h <;> simp_all
+
 def decode {P} [ToType P] {h o} (t : XTy P h o) : Decoded h o :=
   match t with
   | .lift x => {
       type := ToType.toType x
-      hInst := if heq : ToType.isHash x then ToType.instHash x heq else ()
-      oInst := if oeq : ToType.isOrd x then ToType.instOrd x oeq else ()
-      bInst := if beq : ToType.isHash x || ToType.isOrd x then ToType.instBEq x beq else ()
+      hInst := fun heq => ToType.instHash x heq
+      oInst := fun oeq => ToType.instOrd x oeq
+      bInst := fun beq => ToType.instBEq x (by cases beq <;> simp_all)
     }
   | .prod (h1:=h1) (o1:=o1) (h2:=h2) (o2:=o2) x y =>
       let d1 := decode x
       let d2 := decode y
       {
         type := d1.type × d2.type
-        hInst := if heq : h1 && h2 then
-            have h_and : h1 = true ∧ h2 = true := by simp at heq; exact ⟨heq.1, heq.2⟩
-            letI : Hashable d1.type := cast (by simp [h_and.1]) d1.hInst
-            letI : Hashable d2.type := cast (by simp [h_and.2]) d2.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o1 && o2 then
-            have o_and : o1 = true ∧ o2 = true := by simp at oeq; exact ⟨oeq.1, oeq.2⟩
-            letI : Ord d1.type := cast (by simp [o_and.1]) d1.oInst
-            letI : Ord d2.type := cast (by simp [o_and.2]) d2.oInst
-            inferInstance
-          else ()
-        bInst := if beq : (h1 && h2) || (o1 && o2) then
-            have c1 : h1 || o1 := cond_implies_left beq
-            have c2 : h2 || o2 := cond_implies_right beq
-            letI : BEq d1.type := cast (by simp [c1]) d1.bInst
-            letI : BEq d2.type := cast (by simp [c2]) d2.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          have h_and : h1 = true ∧ h2 = true := by simp_all [Bool.and_eq_true]
+          letI : Hashable d1.type := d1.hInst h_and.1
+          letI : Hashable d2.type := d2.hInst h_and.2
+          exact inferInstance
+        oInst := fun oeq => by
+          have o_and : o1 = true ∧ o2 = true := by simp_all [Bool.and_eq_true]
+          letI : Ord d1.type := d1.oInst o_and.1
+          letI : Ord d2.type := d2.oInst o_and.2
+          exact inferInstance
+        bInst := fun beq => by
+          have c1 : h1 = true ∨ o1 = true := by
+            cases beq <;> simp_all [Bool.and_eq_true]
+          have c2 : h2 = true ∨ o2 = true := by
+            cases beq <;> simp_all [Bool.and_eq_true]
+          letI : BEq d1.type := d1.bInst c1
+          letI : BEq d2.type := d2.bInst c2
+          exact inferInstance
       }
   | .sum (h1:=h1) (o1:=o1) (h2:=h2) (o2:=o2) x y =>
       let d1 := decode x
       let d2 := decode y
       {
         type := d1.type ⊕ d2.type
-        hInst := if heq : h1 && h2 then
-            have h_and : h1 = true ∧ h2 = true := by simp at heq; exact ⟨heq.1, heq.2⟩
-            letI : Hashable d1.type := cast (by simp [h_and.1]) d1.hInst
-            letI : Hashable d2.type := cast (by simp [h_and.2]) d2.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o1 && o2 then
-            have o_and : o1 = true ∧ o2 = true := by simp at oeq; exact ⟨oeq.1, oeq.2⟩
-            letI : Ord d1.type := cast (by simp [o_and.1]) d1.oInst
-            letI : Ord d2.type := cast (by simp [o_and.2]) d2.oInst
-            inferInstance
-          else ()
-        bInst := if beq : (h1 && h2) || (o1 && o2) then
-            have c1 : h1 || o1 := cond_implies_left beq
-            have c2 : h2 || o2 := cond_implies_right beq
-            letI : BEq d1.type := cast (by simp [c1]) d1.bInst
-            letI : BEq d2.type := cast (by simp [c2]) d2.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          have h_and : h1 = true ∧ h2 = true := by simp_all [Bool.and_eq_true]
+          letI : Hashable d1.type := d1.hInst h_and.1
+          letI : Hashable d2.type := d2.hInst h_and.2
+          exact inferInstance
+        oInst := fun oeq => by
+          have o_and : o1 = true ∧ o2 = true := by simp_all [Bool.and_eq_true]
+          letI : Ord d1.type := d1.oInst o_and.1
+          letI : Ord d2.type := d2.oInst o_and.2
+          exact inferInstance
+        bInst := fun beq => by
+          have c1 : h1 = true ∨ o1 = true := by
+            cases beq <;> simp_all [Bool.and_eq_true]
+          have c2 : h2 = true ∨ o2 = true := by
+            cases beq <;> simp_all [Bool.and_eq_true]
+          letI : BEq d1.type := d1.bInst c1
+          letI : BEq d2.type := d2.bInst c2
+          exact inferInstance
       }
   | .vec x n =>
       let d := decode x
       {
         type := Vector d.type n
-        hInst := if heq : h then
-            letI : Hashable d.type := cast (by simp [heq]) d.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o then
-            letI : Ord d.type := cast (by simp [oeq]) d.oInst
-            inferInstance
-          else ()
-        bInst := if beq : h || o then
-            letI : BEq d.type := cast (by simp [beq]) d.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          letI : Hashable d.type := d.hInst heq
+          exact inferInstance
+        oInst := fun oeq => by
+          letI : Ord d.type := d.oInst oeq
+          exact inferInstance
+        bInst := fun beq => by
+          have : h = true ∨ o = true := by cases beq <;> simp_all
+          letI : BEq d.type := d.bInst this
+          exact inferInstance
       }
   | .array x =>
       let d := decode x
       {
         type := Array d.type
-        hInst := if heq : h then
-            letI : Hashable d.type := cast (by simp [heq]) d.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o then
-            letI : Ord d.type := cast (by simp [oeq]) d.oInst
-            inferInstance
-          else ()
-        bInst := if beq : h || o then
-            letI : BEq d.type := cast (by simp [beq]) d.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          letI : Hashable d.type := d.hInst heq
+          exact inferInstance
+        oInst := fun oeq => by
+          letI : Ord d.type := d.oInst oeq
+          exact inferInstance
+        bInst := fun beq => by
+          have : h = true ∨ o = true := by cases beq <;> simp_all
+          letI : BEq d.type := d.bInst this
+          exact inferInstance
       }
   | .list x =>
       let d := decode x
       {
         type := List d.type
-        hInst := if heq : h then
-            letI : Hashable d.type := cast (by simp [heq]) d.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o then
-            letI : Ord d.type := cast (by simp [oeq]) d.oInst
-            inferInstance
-          else ()
-        bInst := if beq : h || o then
-            letI : BEq d.type := cast (by simp [beq]) d.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          letI : Hashable d.type := d.hInst heq
+          exact inferInstance
+        oInst := fun oeq => by
+          letI : Ord d.type := d.oInst oeq
+          exact inferInstance
+        bInst := fun beq => by
+          have : h = true ∨ o = true := by cases beq <;> simp_all
+          letI : BEq d.type := d.bInst this
+          exact inferInstance
       }
   | .option x =>
       let d := decode x
       {
         type := Option d.type
-        hInst := if heq : h then
-            letI : Hashable d.type := cast (by simp [heq]) d.hInst
-            inferInstance
-          else ()
-        oInst := if oeq : o then
-            letI : Ord d.type := cast (by simp [oeq]) d.oInst
-            inferInstance
-          else ()
-        bInst := if beq : h || o then
-            letI : BEq d.type := cast (by simp [beq]) d.bInst
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          letI : Hashable d.type := d.hInst heq
+          exact inferInstance
+        oInst := fun oeq => by
+          letI : Ord d.type := d.oInst oeq
+          exact inferInstance
+        bInst := fun beq => by
+          have : h = true ∨ o = true := by cases beq <;> simp_all
+          letI : BEq d.type := d.bInst this
+          exact inferInstance
       }
   | .multiset x =>
       let d := decode x
       {
         type := Multiset d.type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .finset x =>
       let d := decode x
       {
         type := Finset d.type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .quot x r =>
       {
         type := Quot r
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .quotient x s =>
       {
         type := Quotient s
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .squash x =>
       let d := decode x
       {
         type := Squash d.type
-        hInst := inferInstance
-        oInst := inferInstance
-        bInst := inferInstance
+        hInst := fun _ => inferInstance
+        oInst := fun _ => inferInstance
+        bInst := fun _ => inferInstance
       }
   | .subtype (h:=h') (o:=o') x p =>
       let d := ToType.toType x
       {
         type := { a : d // p a }
-        hInst := if heq : ToType.isHash x && h' then
-            have : ToType.isHash x = true := by simp at heq; exact heq.1
-            letI : Hashable d := ToType.instHash x this
-            inferInstance
-          else ()
-        oInst := if oeq : ToType.isOrd x && o' then
-            have : ToType.isOrd x = true := by simp at oeq; exact oeq.1
-            letI : Ord d := ToType.instOrd x this
-            inferInstance
-          else ()
-        bInst := if beq : (ToType.isHash x && h') || (ToType.isOrd x && o') then
-            have : (ToType.isHash x || ToType.isOrd x) = true := cond_implies_subtype beq
-            letI : BEq d := ToType.instBEq x this
-            inferInstance
-          else ()
+        hInst := fun heq => by
+          have h_and : ToType.isHash x = true ∧ h' = true := by simp_all [Bool.and_eq_true]
+          letI : Hashable d := ToType.instHash x h_and.1
+          exact inferInstance
+        oInst := fun oeq => by
+          have o_and : ToType.isOrd x = true ∧ o' = true := by simp_all [Bool.and_eq_true]
+          letI : Ord d := ToType.instOrd x o_and.1
+          exact inferInstance
+        bInst := fun beq => by
+          have : ToType.isHash x = true ∨ ToType.isOrd x = true := by
+            cases beq <;> simp_all [Bool.and_eq_true]
+          letI : BEq d := ToType.instBEq x this
+          exact inferInstance
       }
   | .hashmap k v =>
       let kd := decode k
       let vd := decode v
-      letI : Hashable kd.type := cast (by simp) kd.hInst
-      letI : BEq kd.type := cast (by simp) kd.bInst
+      letI : Hashable kd.type := kd.hInst rfl
+      letI : BEq kd.type := kd.bInst (Or.inl rfl)
       {
-        type := @Std.HashMap kd.type vd.type inferInstance inferInstance
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.HashMap kd.type vd.type
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
-  | .dhashmap k v =>
-      letI : Hashable (ToType.toType k) := ToType.instHash k rfl
-      letI : BEq (ToType.toType k) := ToType.instBEq k (by simp)
+  | .dhashmap k hk v =>
+      letI : Hashable (ToType.toType k) := ToType.instHash k hk
+      letI : BEq (ToType.toType k) := ToType.instBEq k (Or.inl hk)
       {
-        type := @Std.DHashMap (ToType.toType k) (fun a => (decode (v a)).type) inferInstance inferInstance
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.DHashMap (ToType.toType k) (fun a => (decode (v a)).type)
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .hashset k =>
       let kd := decode k
-      letI : Hashable kd.type := cast (by simp) kd.hInst
-      letI : BEq kd.type := cast (by simp) kd.bInst
+      letI : Hashable kd.type := kd.hInst rfl
+      letI : BEq kd.type := kd.bInst (Or.inl rfl)
       {
-        type := @Std.HashSet kd.type inferInstance inferInstance
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.HashSet kd.type
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .treemap k v =>
       let kd := decode k
       let vd := decode v
-      letI : Ord kd.type := cast (by simp) kd.oInst
+      letI : Ord kd.type := kd.oInst rfl
       {
-        type := Batteries.RBMap kd.type vd.type compare
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.TreeMap kd.type vd.type
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
-  | .dtreemap k v =>
-      letI : Ord (ToType.toType k) := ToType.instOrd k rfl
+  | .dtreemap k ok v =>
+      letI : Ord (ToType.toType k) := ToType.instOrd k ok
       {
-        type := Batteries.RBMap (ToType.toType k) (fun a => (decode (v a)).type) compare
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.DTreeMap (ToType.toType k) (fun a => (decode (v a)).type)
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .treeset k =>
       let kd := decode k
-      letI : Ord kd.type := cast (by simp) kd.oInst
+      letI : Ord kd.type := kd.oInst rfl
       {
-        type := Batteries.RBSet kd.type compare
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        type := Std.TreeSet kd.type
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .f x y =>
       let dx := decode x
       let dy := decode y
       {
         type := dx.type → dy.type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .sigma x y =>
       {
         type := (a : ToType.toType x) × (decode (y a)).type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .pi x y =>
       {
         type := (a : ToType.toType x) → (decode (y a)).type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .w d a b =>
       {
         type := WType (fun (x: ((x : ToType.toType d) × (decode (a x)).type)) => (decode (b x.1)).type)
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
   | .thunk x =>
       let d := decode x
       {
         type := Thunk d.type
-        hInst := ()
-        oInst := ()
-        bInst := ()
+        hInst := fun heq => nomatch heq
+        oInst := fun oeq => nomatch oeq
+        bInst := fun beq => nomatch beq
       }
 
 def XTy.toType {P} [ToType P] {h o} (t : XTy P h o) : Type := (decode t).type
 
-instance {P} [ToType P] {h o} (t : XTy P h o) (eq : h = true) : Hashable (XTy.toType t) :=
-  cast (by simp [eq, XTy.toType]) (decode t).hInst
+instance instHashXTy {P} [ToType P] {h o} (t : XTy P h o) (eq : h = true) : Hashable (XTy.toType t) :=
+  (decode t).hInst eq
 
-instance {P} [ToType P] {h o} (t : XTy P h o) (eq : o = true) : Ord (XTy.toType t) :=
-  cast (by simp [eq, XTy.toType]) (decode t).oInst
+instance instOrdXTy {P} [ToType P] {h o} (t : XTy P h o) (eq : o = true) : Ord (XTy.toType t) :=
+  (decode t).oInst eq
 
-instance {P} [ToType P] {h o} (t : XTy P h o) (cond : h || o) : BEq (XTy.toType t) :=
-  cast (by simp [cond, XTy.toType]) (decode t).bInst
+instance instBEqXTy {P} [ToType P] {h o} (t : XTy P h o) (cond : h = true ∨ o = true) : BEq (XTy.toType t) :=
+  (decode t).bInst cond
 
 -- Universe Hierarchy Construction
 
@@ -439,45 +428,39 @@ instance {P} [ToType P] {h o} (t : XTy P h o) (cond : h || o) : BEq (XTy.toType 
 | 0 =>
   let T := fun h o => if h && o then STy else Empty
   let inst : ToType (Σ h o, T h o) := {
-    toType := fun ⟨h, o, x⟩ => if h_eq : h then if o_eq : o then ToType.toType (cast (by simp [h_eq, o_eq] at x; exact x) : STy) else Empty else Empty
+    toType := fun ⟨h, o, x⟩ => match h, o with
+      | true, true => ToType.toType (cast (by simp [T]) x : STy)
+      | _, _ => Empty
     isHash := fun x => x.1
     isOrd := fun x => x.2.1
     instHash := fun ⟨h, o, x⟩ eq => by
       simp at eq
-      simp [eq] at x
-      have : h = true := eq
-      split at x
-      next heq =>
-         split at x
-         next oeq =>
-            have : o = true := oeq
-            let s : STy := cast (by simp [heq, oeq]) x
-            exact ToType.instHash s rfl
-         next => contradiction
-      next => contradiction
+      subst eq
+      simp [T] at x
+      match o with
+      | true =>
+        let s : STy := cast (by simp [T]) x
+        exact ToType.instHash s rfl
+      | false => exact (inferInstance : Hashable Empty)
     instBEq := fun ⟨h, o, x⟩ cond => by
-      simp at cond
-      dsimp
-      split
-      next heq =>
-        split
-        next oeq =>
-           let s : STy := cast (by simp [heq, oeq]) x
-           exact ToType.instBEq s (by simp)
-        next => exact (inferInstance : BEq Empty)
-      next => exact (inferInstance : BEq Empty)
+      match h, o with
+      | true, true =>
+        let s : STy := cast (by simp [T]) x
+        exact ToType.instBEq s (Or.inl rfl)
+      | true, false =>
+        exact (inferInstance : BEq Empty)
+      | false, true =>
+        exact (inferInstance : BEq Empty)
+      | false, false =>
+        exact (inferInstance : BEq Empty)
     instOrd := fun ⟨h, o, x⟩ eq => by
       simp at eq
-      simp [eq] at x
-      have : o = true := eq
-      split at x
-      next heq =>
-         split at x
-         next oeq =>
-            let s : STy := cast (by simp [heq, oeq]) x
-            exact ToType.instOrd s rfl
-         next => contradiction
-      next => contradiction
+      subst eq
+      match h with
+      | true =>
+        let s : STy := cast (by simp [T]) x
+        exact ToType.instOrd s rfl
+      | false => exact (inferInstance : Ord Empty)
   }
   ⟨T, inst⟩
 | n + 1 =>
@@ -488,9 +471,12 @@ instance {P} [ToType P] {h o} (t : XTy P h o) (cond : h || o) : BEq (XTy.toType 
     toType := fun ⟨h, o, x⟩ => @XTy.toType P prevInst h o x
     isHash := fun x => x.1
     isOrd := fun x => x.2.1
-    instHash := fun ⟨h, o, x⟩ eq => inferInstanceAs (Hashable (XTy.toType x))
-    instBEq := fun ⟨h, o, x⟩ cond => inferInstanceAs (BEq (XTy.toType x))
-    instOrd := fun ⟨h, o, x⟩ eq => inferInstanceAs (Ord (XTy.toType x))
+    instHash := fun ⟨h, o, x⟩ eq => @instHashXTy P prevInst h o x eq
+    instBEq := fun ⟨h, o, x⟩ cond => by
+      have cond' : h = true ∨ o = true := by
+        cases h <;> cases o <;> simp_all
+      exact @instBEqXTy P prevInst h o x cond'
+    instOrd := fun ⟨h, o, x⟩ eq => @instOrdXTy P prevInst h o x eq
   }
   ⟨T, inst⟩
 
@@ -508,7 +494,7 @@ lemma instNTy_isOrd (n : Nat) (x : Σ h o, NTy n h o) : ToType.isOrd (self := in
 -- Definition of CTy (Code Type) and Ty
 def CTy (h o : Bool) := (n : Nat) × NTy n h o
 
-instance {h o} : Coe (NTy n h o) (CTy h o) := ⟨fun t => ⟨n, t⟩⟩
+instance {n h o} : Coe (NTy n h o) (CTy h o) := ⟨fun t => ⟨n, t⟩⟩
 
 def Ty := Σ (h o : Bool), CTy h o
 
@@ -537,8 +523,11 @@ instance : ToType Ty where
     let x := t.2.2.2
     letI := instNTy n
     let val : Σ h o, NTy n h o := ⟨t.1, t.2.1, x⟩
-    change (ToType.isHash val || ToType.isOrd val) = true at cond
-    exact ToType.instBEq val cond
+    have cond' : ToType.isHash val = true ∨ ToType.isOrd val = true := by
+      cases cond with
+      | inl h => exact Or.inl (by rw [instNTy_isHash]; exact h)
+      | inr o => exact Or.inr (by rw [instNTy_isOrd]; exact o)
+    exact ToType.instBEq val cond'
 
   instOrd t o := by
     let n := t.2.2.1
@@ -562,8 +551,8 @@ def lift_nty (m : Nat) {n : Nat} {h o} (x : NTy n h o) : NTy (n + m) h o :=
     let x' := lift_nty m x
     letI := instNTy (n + m)
     let y : Σ h o, NTy (n+m) h o := ⟨h, o, x'⟩
-    have h_eq : ToType.isHash y = h := by rw [instNTy_isHash]
-    have o_eq : ToType.isOrd y = o := by rw [instNTy_isOrd]
+    have h_eq : ToType.isHash y = h := instNTy_isHash (n + m) y
+    have o_eq : ToType.isOrd y = o := instNTy_isOrd (n + m) y
     let res : XTy (Σ h o, NTy (n + m) h o) (ToType.isHash y) (ToType.isOrd y) := XTy.lift y
     cast (by dsimp [NTy, instNTy, NTyStruct]; rw [h_eq, o_eq]; rfl) res
 

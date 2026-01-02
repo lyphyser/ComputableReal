@@ -108,14 +108,14 @@ inductive XTy (P : Type) [ToType P] : Bool → Bool → Type where
 -- Maps/Sets
 | hashmap {hv ov} (k : XTy P true ok) (v : XTy P hv ov)
   : XTy P false false
-| dhashmap (k : XTy P true ok) (v : toType k → XTy P false false)
+| dhashmap (k : XTy P true ok) (v : XTy.toType k → XTy P false false)
   : XTy P false false
 | hashset (k : XTy P true ok)
   : XTy P false false
 
 | treemap {hv ov} (k : XTy P hk true) (v : XTy P hv ov)
   : XTy P false false
-| dtreemap (k : XTy P hk true) (v : toType k → XTy P false false)
+| dtreemap (k : XTy P hk true) (v : XTy.toType k → XTy P false false)
   : XTy P false false
 | treeset (k : XTy P hk true)
   : XTy P false false

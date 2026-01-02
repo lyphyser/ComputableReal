@@ -29,6 +29,16 @@ fi
 
 echo "Lean environment setup complete!"
 
+# Install lean4-theorem-proving skill
+echo "Installing lean4-theorem-proving skill..."
+SKILLS_REPO="$HOME/lean4-skills"
+if [ ! -d "$SKILLS_REPO" ]; then
+  git clone https://github.com/cameronfreer/lean4-skills.git "$SKILLS_REPO"
+fi
+mkdir -p ~/.claude/skills
+cp -r "$SKILLS_REPO/plugins/lean4-theorem-proving" ~/.claude/skills/
+echo "Skill installation complete!"
+
 # Add MCP servers from .claude/mcp.json to home directory config
 echo "Configuring MCP servers..."
 CLAUDE_CONFIG="$HOME/.claude.json"

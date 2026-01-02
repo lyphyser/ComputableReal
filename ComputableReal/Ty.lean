@@ -14,9 +14,9 @@ class ToType (α : Type) where
   toType : α → Type
   isHash : α → Bool
   isOrd : α → Bool
-  instHash : ∀ x, isHash x = true → Hashable (toType x)
-  instBEq : ∀ x, (isHash x = true ∨ isOrd x = true) → BEq (toType x)
-  instOrd : ∀ x, isOrd x = true → Ord (toType x)
+  instHash : (x : α) → isHash x = true → Hashable (toType x)
+  instBEq : (x : α) → (isHash x = true ∨ isOrd x = true) → BEq (toType x)
+  instOrd : (x : α) → isOrd x = true → Ord (toType x)
 
 export ToType (toType isHash isOrd instHash instBEq instOrd)
 
@@ -29,8 +29,11 @@ instance : Hashable (PLift p) where hash _ := 0
 instance : Ord (PLift p) where compare _ _ := .eq
 instance : BEq (PLift p) where beq _ _ := true
 
-instance : Hashable NONote where hash _ := 0
-instance : Ord NONote where compare x y := if x < y then .lt else if x = y then .eq else .gt
+deriving instance Hashable for PNat
+
+instance : Hashable NONote where
+  hash o := o.recOn 0 (fun _ n _ _ he ha => mixHash (mixHash he (hash n)) ha)
+instance : Ord NONote where compare := NONote.cmp
 
 instance : Hashable Rat where hash x := mixHash (hash x.num) (hash x.den)
 
@@ -113,10 +116,10 @@ inductive XTy (P : Type) [ToType P] : Bool → Bool → Type where
 | squash {h o} (x : XTy P h o) : XTy P true true
 | subtype {h o} (x : P) (p : toType x → Prop) : XTy P (isHash x && h) (isOrd x && o)
 | hashmap {hv ov} (k : XTy P true ok) (v : XTy P hv ov) : XTy P false false
-| dhashmap (k : P) (hk : isHash k = true) (v : toType k → XTy P false false) : XTy P false false
+| dhashmap (k : {k : P // isHash k = true}) (v : toType k.val → XTy P false false) : XTy P false false
 | hashset (k : XTy P true ok) : XTy P false false
 | treemap {hv ov} (k : XTy P hk true) (v : XTy P hv ov) : XTy P false false
-| dtreemap (k : P) (ok : isOrd k = true) (v : toType k → XTy P false false) : XTy P false false
+| dtreemap (k : {k : P // isOrd k = true}) (v : toType k.val → XTy P false false) : XTy P false false
 | treeset (k : XTy P hk true) : XTy P false false
 | f {h1 o1 h2 o2} (x : XTy P h1 o1) (y : XTy P h2 o2) : XTy P false false
 | sigma (x : P) (y : toType x → XTy P false false) : XTy P false false
@@ -326,11 +329,11 @@ def decode {P} [ToType P] {h o} (t : XTy P h o) : Decoded h o :=
         oInst := fun oeq => nomatch oeq
         bInst := fun beq => nomatch beq
       }
-  | .dhashmap k hk v =>
-      letI : Hashable (ToType.toType k) := ToType.instHash k hk
-      letI : BEq (ToType.toType k) := ToType.instBEq k (Or.inl hk)
+  | .dhashmap k v =>
+      letI : Hashable (ToType.toType k.val) := ToType.instHash k.val k.property
+      letI : BEq (ToType.toType k.val) := ToType.instBEq k.val (Or.inl k.property)
       {
-        type := Std.DHashMap (ToType.toType k) (fun a => (decode (v a)).type)
+        type := Std.DHashMap (ToType.toType k.val) (fun a => (decode (v a)).type)
         hInst := fun heq => nomatch heq
         oInst := fun oeq => nomatch oeq
         bInst := fun beq => nomatch beq
@@ -355,10 +358,10 @@ def decode {P} [ToType P] {h o} (t : XTy P h o) : Decoded h o :=
         oInst := fun oeq => nomatch oeq
         bInst := fun beq => nomatch beq
       }
-  | .dtreemap k ok v =>
-      letI : Ord (ToType.toType k) := ToType.instOrd k ok
+  | .dtreemap k v =>
+      letI : Ord (ToType.toType k.val) := ToType.instOrd k.val k.property
       {
-        type := Std.DTreeMap (ToType.toType k) (fun a => (decode (v a)).type)
+        type := Std.DTreeMap (ToType.toType k.val) (fun a => (decode (v a)).type)
         hInst := fun heq => nomatch heq
         oInst := fun oeq => nomatch oeq
         bInst := fun beq => nomatch beq

@@ -168,53 +168,50 @@ def XTy.toType {P : Type} [ToType P] {h o} : XTy P h o → Type
 
 -- Instances for XTy
 instance {P : Type} [ToType P] {h o} (t : XTy P h o) (eq : h = true) : Hashable (XTy.toType t) := by
-  induction t <;> try (simp at eq; done)
+  cases t <;> try (simp at eq; contradiction)
   case lift x => exact ToType.instHash x eq
   case squash x => exact inferInstance
-  case prod x y ihx ihy =>
-    simp at eq; exact @instHashProd _ _ (ihx eq.1) (ihy eq.2)
-  case sum x y ihx ihy =>
-    simp at eq; exact @instHashSum _ _ (ihx eq.1) (ihy eq.2)
-  case vec x n ih => exact @Vector.instHash _ _ (ih eq)
-  case array x ih => exact @Array.hashable _ (ih eq)
-  case list x ih => exact @List.hashable _ (ih eq)
-  case option x ih => exact @instHashOption _ (ih eq)
+  case prod x y =>
+    simp [XTy.toType] at eq ⊢
+    cases eq; exact inferInstance
+  case sum x y =>
+    simp [XTy.toType] at eq ⊢
+    cases eq; exact inferInstance
+  case vec x n => simp [XTy.toType]; exact inferInstance
+  case array x => simp [XTy.toType]; exact inferInstance
+  case list x => simp [XTy.toType]; exact inferInstance
+  case option x => simp [XTy.toType]; exact inferInstance
   case subtype x p =>
-    simp at eq; exact @instHashSubtype _ _ (ToType.instHash x eq.1)
+    simp at eq; simp [XTy.toType]; exact inferInstance
 
 instance {P : Type} [ToType P] {h o} (t : XTy P h o) (eq : o = true) : Ord (XTy.toType t) := by
-  induction t <;> try (simp at eq; done)
+  cases t <;> try (simp at eq; contradiction)
   case lift x => exact ToType.instOrd x eq
   case squash x => exact inferInstance
-  case prod x y ihx ihy =>
-    simp at eq; exact @instOrdProd _ _ (ihx eq.1) (ihy eq.2)
-  case sum x y ihx ihy =>
-    simp at eq; exact @instOrdSum _ _ (ihx eq.1) (ihy eq.2)
-  case vec x n ih => exact @Vector.instOrd _ _ (ih eq)
-  case array x ih => exact @Array.ord _ (ih eq)
-  case list x ih => exact @List.instOrd _ (ih eq)
-  case option x ih => exact @instOrdOption _ (ih eq)
+  case prod x y =>
+    simp [XTy.toType] at eq ⊢
+    cases eq; exact inferInstance
+  case sum x y =>
+    simp [XTy.toType] at eq ⊢
+    cases eq; exact inferInstance
+  case vec x n => simp [XTy.toType]; exact inferInstance
+  case array x => simp [XTy.toType]; exact inferInstance
+  case list x => simp [XTy.toType]; exact inferInstance
+  case option x => simp [XTy.toType]; exact inferInstance
   case subtype x p =>
-    simp at eq; exact @instOrdSubtype _ _ (ToType.instOrd x eq.1)
+    simp at eq; simp [XTy.toType]; exact inferInstance
 
 instance {P : Type} [ToType P] {h o} (t : XTy P h o) (cond : h || o) : BEq (XTy.toType t) := by
-  induction t
+  cases t <;> try (simp at cond; contradiction)
   case lift x => exact ToType.instBEq x cond
   case squash => exact inferInstance
-  case prod x y ihx ihy =>
-    have cx := Bool.or_and_distrib_right.mp cond
-    exact @instBEqProd _ _ (ihx cx.1) (ihy cx.2)
-  case sum x y ihx ihy =>
-    have cx := Bool.or_and_distrib_right.mp cond
-    exact @instBEqSum _ _ (ihx cx.1) (ihy cx.2)
-  case vec x n ih => exact @Vector.instBEq _ _ (ih cond)
-  case array x ih => exact @Array.be _ (ih cond)
-  case list x ih => exact @List.instBEq _ (ih cond)
-  case option x ih => exact @instBEqOption _ (ih cond)
-  case subtype x p =>
-    have ⟨_, _⟩ := Bool.or_and_distrib_right.mp cond
-    exact @instBEqSubtype _ _ (ToType.instBEq x (by simp_all))
-  all_goals try (simp at cond; done)
+  case prod x y => simp [XTy.toType]; exact inferInstance
+  case sum x y => simp [XTy.toType]; exact inferInstance
+  case vec x n => simp [XTy.toType]; exact inferInstance
+  case array x => simp [XTy.toType]; exact inferInstance
+  case list x => simp [XTy.toType]; exact inferInstance
+  case option x => simp [XTy.toType]; exact inferInstance
+  case subtype x p => simp [XTy.toType]; exact inferInstance
 
 -- Universe Hierarchy Construction
 

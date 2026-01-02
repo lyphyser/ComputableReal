@@ -436,31 +436,37 @@ instance instBEqXTy {P} [ToType P] {h o} (t : XTy P h o) (cond : h = true ∨ o 
     instHash := fun ⟨h, o, x⟩ eq => by
       simp at eq
       subst eq
-      simp [T] at x
       match o with
       | true =>
-        let s : STy := cast (by simp [T]) x
-        exact ToType.instHash s rfl
-      | false => exact (inferInstance : Hashable Empty)
+        show Hashable (ToType.toType (cast (by rfl) x : STy))
+        exact ToType.instHash (cast (by rfl) x : STy) rfl
+      | false =>
+        show Hashable Empty
+        exact inferInstance
     instBEq := fun ⟨h, o, x⟩ cond => by
       match h, o with
       | true, true =>
-        let s : STy := cast (by simp [T]) x
-        exact ToType.instBEq s (Or.inl rfl)
+        show BEq (ToType.toType (cast (by rfl) x : STy))
+        exact ToType.instBEq (cast (by rfl) x : STy) (Or.inl rfl)
       | true, false =>
-        exact (inferInstance : BEq Empty)
+        show BEq Empty
+        exact inferInstance
       | false, true =>
-        exact (inferInstance : BEq Empty)
+        show BEq Empty
+        exact inferInstance
       | false, false =>
-        exact (inferInstance : BEq Empty)
+        show BEq Empty
+        exact inferInstance
     instOrd := fun ⟨h, o, x⟩ eq => by
       simp at eq
       subst eq
       match h with
       | true =>
-        let s : STy := cast (by simp [T]) x
-        exact ToType.instOrd s rfl
-      | false => exact (inferInstance : Ord Empty)
+        show Ord (ToType.toType (cast (by rfl) x : STy))
+        exact ToType.instOrd (cast (by rfl) x : STy) rfl
+      | false =>
+        show Ord Empty
+        exact inferInstance
   }
   ⟨T, inst⟩
 | n + 1 =>
@@ -493,8 +499,6 @@ lemma instNTy_isOrd (n : Nat) (x : Σ h o, NTy n h o) : ToType.isOrd (self := in
 
 -- Definition of CTy (Code Type) and Ty
 def CTy (h o : Bool) := (n : Nat) × NTy n h o
-
-instance {n h o} : Coe (NTy n h o) (CTy h o) := ⟨fun t => ⟨n, t⟩⟩
 
 def Ty := Σ (h o : Bool), CTy h o
 
@@ -554,7 +558,7 @@ def lift_nty (m : Nat) {n : Nat} {h o} (x : NTy n h o) : NTy (n + m) h o :=
     have h_eq : ToType.isHash y = h := instNTy_isHash (n + m) y
     have o_eq : ToType.isOrd y = o := instNTy_isOrd (n + m) y
     let res : XTy (Σ h o, NTy (n + m) h o) (ToType.isHash y) (ToType.isOrd y) := XTy.lift y
-    cast (by dsimp [NTy, instNTy, NTyStruct]; rw [h_eq, o_eq]; rfl) res
+    cast (by dsimp [NTy, instNTy, NTyStruct]; rw [h_eq, o_eq]) res
 
 instance (n m : Nat) {h o} : Coe (NTy n h o) (NTy (n + m) h o) where
   coe := lift_nty m

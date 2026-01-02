@@ -51,7 +51,7 @@ instance instComputableOfNatAtLeastTwo : (n : ℕ) → [n.AtLeastTwo] → IsComp
   fun _ _ ↦ ⟨
     ⟨fun _ ↦ ⟨⟨_, _⟩, rfl.le⟩,
       IsCauSeq.const _, IsCauSeq.const _,
-      fun _ ↦ by simpa using ⟨rfl.le, rfl.le⟩,
+      fun _ ↦ by simp,
       by rfl⟩,
     ComputableℝSeq.val_eq_mk_lb _⟩
 

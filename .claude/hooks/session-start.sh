@@ -14,9 +14,9 @@ if ! command -v elan &> /dev/null; then
   curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
 fi
 
-# Add elan to PATH for this session
-echo 'export PATH="$HOME/.elan/bin:$PATH"' >> "$CLAUDE_ENV_FILE"
-export PATH="$HOME/.elan/bin:$PATH"
+for i in elan lake lean; do
+  ln -sf "$HOME/.elan/bin/$i" "/usr/bin/$i"
+done
 
 # Ensure we're using the correct Lean version
 elan show

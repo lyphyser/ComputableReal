@@ -153,28 +153,12 @@ def XTy.toType {P : Type} [ToType P] {h o} : XTy P h o → Type
 | .quot x r => Quot r
 | .quotient x s => Quotient s
 | .squash x => Squash (XTy.toType x)
-| .hashmap k v =>
-    have hk : true || _ := trivial
-    letI : BEq (XTy.toType k) := inferInstanceAs (BEq (XTy.toType k))
-    letI : Hashable (XTy.toType k) := inferInstanceAs (Hashable (XTy.toType k))
-    Std.HashMap (XTy.toType k) (XTy.toType v)
-| .dhashmap k v =>
-    letI : BEq (ToType.toType k) := inferInstance
-    letI : Hashable (ToType.toType k) := inferInstance
-    Std.DHashMap (ToType.toType k) (fun a => XTy.toType (v a))
-| .hashset k =>
-    letI : BEq (XTy.toType k) := inferInstanceAs (BEq (XTy.toType k))
-    letI : Hashable (XTy.toType k) := inferInstanceAs (Hashable (XTy.toType k))
-    Std.HashSet (XTy.toType k)
-| .treemap k v =>
-    letI : Ord (XTy.toType k) := inferInstanceAs (Ord (XTy.toType k))
-    Batteries.RBMap (XTy.toType k) (XTy.toType v) compare
-| .dtreemap k v =>
-    letI : Ord (ToType.toType k) := inferInstance
-    Batteries.RBMap (ToType.toType k) (fun a => XTy.toType (v a)) compare
-| .treeset k =>
-    letI : Ord (XTy.toType k) := inferInstanceAs (Ord (XTy.toType k))
-    Batteries.RBSet (XTy.toType k) compare
+| .hashmap k v => Std.HashMap (XTy.toType k) (XTy.toType v)
+| .dhashmap k v => Std.DHashMap (ToType.toType k) (fun a => XTy.toType (v a))
+| .hashset k => Std.HashSet (XTy.toType k)
+| .treemap k v => Batteries.RBMap (XTy.toType k) (XTy.toType v) compare
+| .dtreemap k v => Batteries.RBMap (ToType.toType k) (fun a => XTy.toType (v a)) compare
+| .treeset k => Batteries.RBSet (XTy.toType k) compare
 | .f x y => XTy.toType x → XTy.toType y
 | .sigma x y => (a : ToType.toType x) × XTy.toType (y a)
 | .pi x y => (a : ToType.toType x) → XTy.toType (y a)
@@ -183,43 +167,67 @@ def XTy.toType {P : Type} [ToType P] {h o} : XTy P h o → Type
 | .thunk x => Thunk (XTy.toType x)
 
 -- Instances for XTy
-instance {P : Type} [ToType P] {h o} (t : XTy P h o) (eq : h = true) : Hashable (XTy.toType t) := by
-  cases t <;> try (simp at eq; contradiction)
-  case lift x => exact ToType.instHash x eq
+instance {P : Type} [ToType P] {o} (t : XTy P true o) : Hashable (XTy.toType t) := by
+  cases t <;> try contradiction
+  case lift x => exact ToType.instHash x rfl
   case squash x => exact inferInstance
   case prod x y =>
-    simp [XTy.toType] at eq ⊢
-    cases eq; exact inferInstance
+    simp [XTy.toType]
+    exact inferInstance
   case sum x y =>
-    simp [XTy.toType] at eq ⊢
-    cases eq; exact inferInstance
+    simp [XTy.toType]
+    exact inferInstance
   case vec x n => simp [XTy.toType]; exact inferInstance
   case array x => simp [XTy.toType]; exact inferInstance
   case list x => simp [XTy.toType]; exact inferInstance
   case option x => simp [XTy.toType]; exact inferInstance
   case subtype x p =>
-    simp at eq; simp [XTy.toType]; exact inferInstance
+    simp [XTy.toType]; exact inferInstance
 
-instance {P : Type} [ToType P] {h o} (t : XTy P h o) (eq : o = true) : Ord (XTy.toType t) := by
-  cases t <;> try (simp at eq; contradiction)
-  case lift x => exact ToType.instOrd x eq
+instance {P : Type} [ToType P] {h} (t : XTy P h true) : Ord (XTy.toType t) := by
+  cases t <;> try contradiction
+  case lift x => exact ToType.instOrd x rfl
   case squash x => exact inferInstance
   case prod x y =>
-    simp [XTy.toType] at eq ⊢
-    cases eq; exact inferInstance
+    simp [XTy.toType]
+    exact inferInstance
   case sum x y =>
-    simp [XTy.toType] at eq ⊢
-    cases eq; exact inferInstance
+    simp [XTy.toType]
+    exact inferInstance
   case vec x n => simp [XTy.toType]; exact inferInstance
   case array x => simp [XTy.toType]; exact inferInstance
   case list x => simp [XTy.toType]; exact inferInstance
   case option x => simp [XTy.toType]; exact inferInstance
   case subtype x p =>
-    simp at eq; simp [XTy.toType]; exact inferInstance
+    simp [XTy.toType]; exact inferInstance
 
-instance {P : Type} [ToType P] {h o} (t : XTy P h o) (cond : h || o) : BEq (XTy.toType t) := by
-  cases t <;> try (simp at cond; contradiction)
-  case lift x => exact ToType.instBEq x cond
+instance {P : Type} [ToType P] (t : XTy P true false) : BEq (XTy.toType t) := by
+  cases t <;> try contradiction
+  case lift x => exact ToType.instBEq x (by simp)
+  case squash => exact inferInstance
+  case prod x y => simp [XTy.toType]; exact inferInstance
+  case sum x y => simp [XTy.toType]; exact inferInstance
+  case vec x n => simp [XTy.toType]; exact inferInstance
+  case array x => simp [XTy.toType]; exact inferInstance
+  case list x => simp [XTy.toType]; exact inferInstance
+  case option x => simp [XTy.toType]; exact inferInstance
+  case subtype x p => simp [XTy.toType]; exact inferInstance
+
+instance {P : Type} [ToType P] (t : XTy P false true) : BEq (XTy.toType t) := by
+  cases t <;> try contradiction
+  case lift x => exact ToType.instBEq x (by simp)
+  case squash => exact inferInstance
+  case prod x y => simp [XTy.toType]; exact inferInstance
+  case sum x y => simp [XTy.toType]; exact inferInstance
+  case vec x n => simp [XTy.toType]; exact inferInstance
+  case array x => simp [XTy.toType]; exact inferInstance
+  case list x => simp [XTy.toType]; exact inferInstance
+  case option x => simp [XTy.toType]; exact inferInstance
+  case subtype x p => simp [XTy.toType]; exact inferInstance
+
+instance {P : Type} [ToType P] (t : XTy P true true) : BEq (XTy.toType t) := by
+  cases t <;> try contradiction
+  case lift x => exact ToType.instBEq x (by simp)
   case squash => exact inferInstance
   case prod x y => simp [XTy.toType]; exact inferInstance
   case sum x y => simp [XTy.toType]; exact inferInstance

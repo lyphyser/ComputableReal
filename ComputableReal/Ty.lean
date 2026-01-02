@@ -108,14 +108,14 @@ inductive XTy (P : Type) [ToType P] : Bool → Bool → Type where
 -- Maps/Sets
 | hashmap {hv ov} (k : XTy P true ok) (v : XTy P hv ov)
   : XTy P false false
-| dhashmap (k : XTy P true ok) (v : XTy.toType k → XTy P false false)
+| dhashmap (k : P) (v : toType k → XTy P false false)
   : XTy P false false
 | hashset (k : XTy P true ok)
   : XTy P false false
 
 | treemap {hv ov} (k : XTy P hk true) (v : XTy P hv ov)
   : XTy P false false
-| dtreemap (k : XTy P hk true) (v : XTy.toType k → XTy P false false)
+| dtreemap (k : P) (v : toType k → XTy P false false)
   : XTy P false false
 | treeset (k : XTy P hk true)
   : XTy P false false
@@ -154,10 +154,10 @@ def XTy.toType {P : Type} [ToType P] {h o} : XTy P h o → Type
 | .quotient x s => Quotient s
 | .squash x => Squash (XTy.toType x)
 | .hashmap k v => Std.HashMap (XTy.toType k) (XTy.toType v)
-| .dhashmap k v => Std.DHashMap (XTy.toType k) (fun a => XTy.toType (v a))
+| .dhashmap k v => Std.DHashMap (ToType.toType k) (fun a => XTy.toType (v a))
 | .hashset k => Std.HashSet (XTy.toType k)
 | .treemap k v => Batteries.RBMap (XTy.toType k) (XTy.toType v) compare
-| .dtreemap k v => Batteries.RBMap (XTy.toType k) (fun a => XTy.toType (v a)) compare
+| .dtreemap k v => Batteries.RBMap (ToType.toType k) (fun a => XTy.toType (v a)) compare
 | .treeset k => Batteries.RBSet (XTy.toType k) compare
 | .f x y => XTy.toType x → XTy.toType y
 | .sigma x y => (a : ToType.toType x) × XTy.toType (y a)

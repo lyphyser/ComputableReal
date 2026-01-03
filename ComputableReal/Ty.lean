@@ -198,9 +198,9 @@ def decode {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Decoded 
   | .lift x =>
       Decodable.decode x
   | .prod x y =>
-      Decoded.map2 (decode x) (decode y) (fun a b => a × b)
+      Decoded.map2 (decode x) (decode y) (· × ·)
   | .sum x y =>
-      Decoded.map2 (decode x) (decode y) (fun a b => a ⊕ b)
+      Decoded.map2 (decode x) (decode y) (· ⊕ ·)
   | .vec x n =>
       (decode x).map (fun t => Vector t n)
   | .array x =>
@@ -210,36 +210,24 @@ def decode {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Decoded 
   | .option x =>
       (decode x).map Option
   | .multiset x =>
-      let d := decode x
-      {
-        type := Multiset d.type
-      }
+      { type := Multiset (decode x).type }
   | .finset x =>
-      let d := decode x
-      {
-        type := Finset d.type
-      }
+      { type := Finset (decode x).type }
   | .quot x r =>
-      {
-        type := Quot r
-      }
+      { type := Quot r }
   | .quotient x s =>
-      {
-        type := Quotient s
-      }
+      { type := Quotient s }
   | .squash x =>
-      let d := decode x
       {
-        type := Squash d.type
+        type := Squash (decode x).type
         hInst := fun _ => inferInstance
         oInst := fun _ => inferInstance
         bInst := fun _ => inferInstance
       }
   | .subtype x p =>
       let d := Decodable.decode x
-      have hx : toType x = d.type := rfl
       {
-        type := { a : d.type // p (cast hx.symm a) }
+        type := { a : toType x // p a }
         hInst := fun heq => by
           letI : Hashable d.type := d.hInst heq
           infer_instance
@@ -255,91 +243,46 @@ def decode {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Decoded 
       let vd := decode v
       letI : Hashable kd.type := kd.hInst rfl
       letI : BEq kd.type := kd.bInst (Or.inl rfl)
-      {
-        type := Std.HashMap kd.type vd.type
-      }
+      { type := Std.HashMap kd.type vd.type }
   | .dhashmap k v =>
       let kd := Decodable.decode k
       letI : Hashable kd.type := kd.hInst rfl
       letI : BEq kd.type := kd.bInst (Or.inl rfl)
-      {
-        type := Std.DHashMap kd.type (fun a => (decode (v a)).type)
-      }
+      { type := Std.DHashMap kd.type (fun a => (decode (v a)).type) }
   | .hashset k =>
       let kd := decode k
       letI : Hashable kd.type := kd.hInst rfl
       letI : BEq kd.type := kd.bInst (Or.inl rfl)
-      {
-        type := Std.HashSet kd.type
-      }
+      { type := Std.HashSet kd.type }
   | .treemap k v =>
       let kd := decode k
       let vd := decode v
       letI : Ord kd.type := kd.oInst rfl
-      {
-        type := Std.TreeMap kd.type vd.type
-      }
+      { type := Std.TreeMap kd.type vd.type }
   | .dtreemap k v =>
       let kd := Decodable.decode k
       letI : Ord kd.type := kd.oInst rfl
-      {
-        type := Std.DTreeMap kd.type (fun a => (decode (v a)).type)
-      }
+      { type := Std.DTreeMap kd.type (fun a => (decode (v a)).type) }
   | .treeset k =>
       let kd := decode k
       letI : Ord kd.type := kd.oInst rfl
-      {
-        type := Std.TreeSet kd.type
-      }
+      { type := Std.TreeSet kd.type }
   | .f x y =>
-      let dx := decode x
-      let dy := decode y
-      {
-        type := dx.type → dy.type
-      }
+      { type := (decode x).type → (decode y).type }
   | .sigma x y =>
-      let dx := Decodable.decode x
-      {
-        type := (a : dx.type) × (decode (y a)).type
-      }
+      { type := (a : toType x) × (decode (y a)).type }
   | .pi x y =>
-      let dx := Decodable.decode x
-      {
-        type := (a : dx.type) → (decode (y a)).type
-      }
+      { type := (a : toType x) → (decode (y a)).type }
   | .w d a b =>
-      let dd := Decodable.decode d
       {
-        type := WType (fun (x : ((x : dd.type) × (decode (a x)).type)) => (decode (b x.1)).type)
+        type := WType (fun (x : ((x : toType d) × (decode (a x)).type)) => (decode (b x.1)).type)
       }
   | .thunk x =>
-      let d := decode x
-      {
-        type := Thunk d.type
-      }
+      { type := Thunk (decode x).type }
 
 instance instDecodableXTy {P} [∀ h o, Decodable (P h o) h o] {h o} :
     Decodable (XTy P h o) h o where
   decode := decode
-
-def XTy.toType {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Type :=
-  (decode t).type
-
-instance instHashXTy {P} [∀ h o, Decodable (P h o) h o] {o} (t : XTy P true o) :
-    Hashable (XTy.toType t) :=
-  (decode t).hInst rfl
-
-instance instOrdXTy {P} [∀ h o, Decodable (P h o) h o] {h} (t : XTy P h true) :
-    Ord (XTy.toType t) :=
-  (decode t).oInst rfl
-
-instance (priority := 100) instBEqXTyHash {P} [∀ h o, Decodable (P h o) h o] {o}
-    (t : XTy P true o) : BEq (XTy.toType t) :=
-  (decode t).bInst (Or.inl rfl)
-
-instance (priority := 50) instBEqXTyOrd {P} [∀ h o, Decodable (P h o) h o] {h}
-    (t : XTy P h true) : BEq (XTy.toType t) :=
-  (decode t).bInst (Or.inr rfl)
 
 -- Universe Hierarchy Construction
 
@@ -352,7 +295,7 @@ attribute [instance] NTyPack.decodable
 @[reducible] def NTyStruct : (n : Nat) → NTyPack
 | 0 =>
   let T := fun h o => if h && o then STy else Empty
-  let decodable : ∀ h o, Decodable (T h o) h o
+  letI : ∀ h o, Decodable (T h o) h o
     | true, true =>
         {
           decode := fun x =>
@@ -381,25 +324,19 @@ attribute [instance] NTyPack.decodable
             intro x
             cases x
         }
-  { T := T, decodable := decodable }
+  { T := T, decodable := inferInstance }
 | n + 1 =>
   let prev := NTyStruct n
   letI : ∀ h o, Decodable (prev.T h o) h o := prev.decodable
   let T := fun h o => XTy prev.T h o
-  let decodable : ∀ h o, Decodable (T h o) h o := by
+  letI : ∀ h o, Decodable (T h o) h o := by
     intro h o
     infer_instance
-  { T := T, decodable := decodable }
+  { T := T, decodable := inferInstance }
 
 @[reducible] def NTy (n : Nat) (h o : Bool) : Type := (NTyStruct n).T h o
-instance instHashNTy (n : Nat) (o : Bool) (x : NTy n true o) :
-    Hashable (toType x) := (Decodable.decode x).hInst rfl
-instance instOrdNTy (n : Nat) (h : Bool) (x : NTy n h true) :
-    Ord (toType x) := (Decodable.decode x).oInst rfl
-instance instBEqHashNTy (n : Nat) (o : Bool) (x : NTy n true o) :
-    BEq (toType x) := (Decodable.decode x).bInst (Or.inl rfl)
-instance instBEqOrdNTy (n : Nat) (h : Bool) (x : NTy n h true) :
-    BEq (toType x) := (Decodable.decode x).bInst (Or.inr rfl)
+instance instDecodableNTy (n : Nat) : ∀ h o, Decodable (NTy n h o) h o :=
+  (NTyStruct n).decodable
 
 -- Definition of CTy (Code Type) and Ty
 def CTy (h o : Bool) := (n : Nat) × NTy n h o

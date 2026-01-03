@@ -10,9 +10,63 @@ import Std.Data.HashMap
 import Std.Data.DHashMap
 import Std.Data.HashSet
 
+structure Decoded (h o : Bool) where
+  type : Type
+  hInst : h = true → Hashable type := by
+    intro _; exfalso; contradiction
+  oInst : o = true → Ord type := by
+    intro _; exfalso; contradiction
+  bInst : h = true ∨ o = true → BEq type := by
+    intro _; exfalso; contradiction
+
+def Decoded.map {h o} (d : Decoded h o) (f : Type → Type)
+    (hashInst : ∀ {α}, Hashable α → Hashable (f α) := by
+      intro α h; letI := h; infer_instance)
+    (ordInst : ∀ {α}, Ord α → Ord (f α) := by
+      intro α h; letI := h; infer_instance)
+    (beqInst : ∀ {α}, BEq α → BEq (f α) := by
+      intro α h; letI := h; infer_instance) : Decoded h o :=
+  {
+    type := f d.type
+    hInst := fun heq => hashInst (d.hInst heq)
+    oInst := fun oeq => ordInst (d.oInst oeq)
+    bInst := fun beq => beqInst (d.bInst beq)
+  }
+
+def Decoded.map2 {h1 o1 h2 o2} (d1 : Decoded h1 o1) (d2 : Decoded h2 o2)
+    (f : Type → Type → Type)
+    (hashInst : ∀ {α β}, Hashable α → Hashable β → Hashable (f α β) := by
+      intro α β ha hb; letI := ha; letI := hb; infer_instance)
+    (ordInst : ∀ {α β}, Ord α → Ord β → Ord (f α β) := by
+      intro α β ha hb; letI := ha; letI := hb; infer_instance)
+    (beqInst : ∀ {α β}, BEq α → BEq β → BEq (f α β) := by
+      intro α β ha hb; letI := ha; letI := hb; infer_instance) :
+    Decoded (h1 && h2) (o1 && o2) :=
+  {
+    type := f d1.type d2.type
+    hInst := fun heq => by
+      have h_and : h1 = true ∧ h2 = true := by simp_all [Bool.and_eq_true]
+      exact hashInst (d1.hInst h_and.1) (d2.hInst h_and.2)
+    oInst := fun oeq => by
+      have o_and : o1 = true ∧ o2 = true := by simp_all [Bool.and_eq_true]
+      exact ordInst (d1.oInst o_and.1) (d2.oInst o_and.2)
+    bInst := fun beq => by
+      have c1 : h1 = true ∨ o1 = true := by
+        cases beq <;> simp_all [Bool.and_eq_true]
+      have c2 : h2 = true ∨ o2 = true := by
+        cases beq <;> simp_all [Bool.and_eq_true]
+      exact beqInst (d1.bInst c1) (d2.bInst c2)
+  }
+
+class Decodable (α : Type) (h o : outParam Bool) where
+  decode : α → Decoded h o
+
 /-- Type class for codes that can be decoded into a Type -/
 class ToType (α : Type) where
   toType : α → Type
+
+instance instToTypeDecodable {α h o} [Decodable α h o] : ToType α where
+  toType x := (Decodable.decode x).type
 
 export ToType (toType)
 
@@ -20,8 +74,6 @@ export ToType (toType)
 instance : Hashable Empty where hash _ := 0
 instance : Ord Empty where compare _ _ := .eq
 instance : BEq Empty where beq _ _ := true
-instance : ToType Empty where
-  toType x := nomatch x
 
 instance : Hashable (PLift p) where hash _ := 0
 instance : Ord (PLift p) where compare _ _ := .eq
@@ -99,23 +151,23 @@ instance (s : STy) : Ord (toType s) := by
 instance (s : STy) : BEq (toType s) := by
   cases s <;> simpa [ToType.toType] using (inferInstance : BEq _)
 
-instance {P : Bool → Bool → Type} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)] {o} (x : P true o) : Hashable (toType x) :=
-  (inferInstance : (x : P true o) → Hashable (toType x)) x
+instance {P : Bool → Bool → Type} [∀ h o, Decodable (P h o) h o] {o} (x : P true o) :
+    Hashable (toType x) :=
+  (Decodable.decode x).hInst rfl
 
-instance {P : Bool → Bool → Type} [∀ h o, ToType (P h o)]
-    [∀ h, (x : P h true) → Ord (toType x)] {h} (x : P h true) : Ord (toType x) :=
-  (inferInstance : (x : P h true) → Ord (toType x)) x
+instance {P : Bool → Bool → Type} [∀ h o, Decodable (P h o) h o] {h} (x : P h true) :
+    Ord (toType x) :=
+  (Decodable.decode x).oInst rfl
 
-instance {P : Bool → Bool → Type} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → BEq (toType x)] {o} (x : P true o) : BEq (toType x) :=
-  (inferInstance : (x : P true o) → BEq (toType x)) x
+instance {P : Bool → Bool → Type} [∀ h o, Decodable (P h o) h o] {o} (x : P true o) :
+    BEq (toType x) :=
+  (Decodable.decode x).bInst (Or.inl rfl)
 
-instance {P : Bool → Bool → Type} [∀ h o, ToType (P h o)]
-    [∀ h, (x : P h true) → BEq (toType x)] {h} (x : P h true) : BEq (toType x) :=
-  (inferInstance : (x : P h true) → BEq (toType x)) x
+instance {P : Bool → Bool → Type} [∀ h o, Decodable (P h o) h o] {h} (x : P h true) :
+    BEq (toType x) :=
+  (Decodable.decode x).bInst (Or.inr rfl)
 
-inductive XTy (P : Bool → Bool → Type) [∀ h o, ToType (P h o)] : Bool → Bool → Type where
+inductive XTy (P : Bool → Bool → Type) [∀ h o, Decodable (P h o) h o] : Bool → Bool → Type where
 | lift {h o} (x : P h o) : XTy P h o
 | prod {h1 o1 h2 o2} (x : XTy P h1 o1) (y : XTy P h2 o2) : XTy P (h1 && h2) (o1 && o2)
 | sum {h1 o1 h2 o2} (x : XTy P h1 o1) (y : XTy P h2 o2) : XTy P (h1 && h2) (o1 && o2)
@@ -141,114 +193,14 @@ inductive XTy (P : Bool → Bool → Type) [∀ h o, ToType (P h o)] : Bool → 
 | w {h o} (d : P h o) (a : toType d → XTy P false false) (b : toType d → XTy P false false) : XTy P false false
 | thunk {h o} (x : XTy P h o) : XTy P false false
 
-structure Decoded (h o : Bool) where
-  type : Type
-  hInst : h = true → Hashable type := by
-    intro _; exfalso; contradiction
-  oInst : o = true → Ord type := by
-    intro _; exfalso; contradiction
-  bInst : h = true ∨ o = true → BEq type := by
-    intro _; exfalso; contradiction
-
-def Decoded.map {h o} (d : Decoded h o) (f : Type → Type)
-    (hashInst : ∀ {α}, Hashable α → Hashable (f α) := by
-      intro α h; letI := h; infer_instance)
-    (ordInst : ∀ {α}, Ord α → Ord (f α) := by
-      intro α h; letI := h; infer_instance)
-    (beqInst : ∀ {α}, BEq α → BEq (f α) := by
-      intro α h; letI := h; infer_instance) : Decoded h o :=
-  {
-    type := f d.type
-    hInst := fun heq => by
-      letI : Hashable d.type := d.hInst heq
-      letI : Hashable (f d.type) := hashInst (α := d.type) inferInstance
-      exact inferInstance
-    oInst := fun oeq => by
-      letI : Ord d.type := d.oInst oeq
-      letI : Ord (f d.type) := ordInst (α := d.type) inferInstance
-      exact inferInstance
-    bInst := fun beq => by
-      have : h = true ∨ o = true := by cases beq <;> simp_all
-      letI : BEq d.type := d.bInst this
-      letI : BEq (f d.type) := beqInst (α := d.type) inferInstance
-      exact inferInstance
-  }
-
-def decode {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {h o} (t : XTy P h o) : Decoded h o :=
+def decode {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Decoded h o :=
   match t with
-  | .lift x => {
-      type := ToType.toType x
-      hInst := fun heq => by
-        cases h <;> cases heq
-        infer_instance
-      oInst := fun oeq => by
-        cases o <;> cases oeq
-        infer_instance
-      bInst := fun beq => by
-        cases h <;> cases o
-        ·
-            have : False := by
-              cases beq with
-              | inl hEq => cases hEq
-              | inr oEq => cases oEq
-            cases this
-        · infer_instance
-        · infer_instance
-        · infer_instance
-    }
-  | .prod (h1:=h1) (o1:=o1) (h2:=h2) (o2:=o2) x y =>
-      let d1 := decode x
-      let d2 := decode y
-      {
-        type := d1.type × d2.type
-        hInst := fun heq => by
-          have h_and : h1 = true ∧ h2 = true := by simp_all [Bool.and_eq_true]
-          letI : Hashable d1.type := d1.hInst h_and.1
-          letI : Hashable d2.type := d2.hInst h_and.2
-          exact inferInstance
-        oInst := fun oeq => by
-          have o_and : o1 = true ∧ o2 = true := by simp_all [Bool.and_eq_true]
-          letI : Ord d1.type := d1.oInst o_and.1
-          letI : Ord d2.type := d2.oInst o_and.2
-          exact inferInstance
-        bInst := fun beq => by
-          have c1 : h1 = true ∨ o1 = true := by
-            cases beq <;> simp_all [Bool.and_eq_true]
-          have c2 : h2 = true ∨ o2 = true := by
-            cases beq <;> simp_all [Bool.and_eq_true]
-          letI : BEq d1.type := d1.bInst c1
-          letI : BEq d2.type := d2.bInst c2
-          exact inferInstance
-      }
-  | .sum (h1:=h1) (o1:=o1) (h2:=h2) (o2:=o2) x y =>
-      let d1 := decode x
-      let d2 := decode y
-      {
-        type := d1.type ⊕ d2.type
-        hInst := fun heq => by
-          have h_and : h1 = true ∧ h2 = true := by simp_all [Bool.and_eq_true]
-          letI : Hashable d1.type := d1.hInst h_and.1
-          letI : Hashable d2.type := d2.hInst h_and.2
-          exact inferInstance
-        oInst := fun oeq => by
-          have o_and : o1 = true ∧ o2 = true := by simp_all [Bool.and_eq_true]
-          letI : Ord d1.type := d1.oInst o_and.1
-          letI : Ord d2.type := d2.oInst o_and.2
-          exact inferInstance
-        bInst := fun beq => by
-          have c1 : h1 = true ∨ o1 = true := by
-            cases beq <;> simp_all [Bool.and_eq_true]
-          have c2 : h2 = true ∨ o2 = true := by
-            cases beq <;> simp_all [Bool.and_eq_true]
-          letI : BEq d1.type := d1.bInst c1
-          letI : BEq d2.type := d2.bInst c2
-          exact inferInstance
-      }
+  | .lift x =>
+      Decodable.decode x
+  | .prod x y =>
+      Decoded.map2 (decode x) (decode y) (fun a b => a × b)
+  | .sum x y =>
+      Decoded.map2 (decode x) (decode y) (fun a b => a ⊕ b)
   | .vec x n =>
       (decode x).map (fun t => Vector t n)
   | .array x =>
@@ -283,27 +235,20 @@ def decode {P} [∀ h o, ToType (P h o)]
         oInst := fun _ => inferInstance
         bInst := fun _ => inferInstance
       }
-  | .subtype (h:=h') (o:=o') x p =>
-      let d := ToType.toType x
+  | .subtype x p =>
+      let d := Decodable.decode x
+      have hx : toType x = d.type := rfl
       {
-        type := { a : d // p a }
+        type := { a : d.type // p (cast hx.symm a) }
         hInst := fun heq => by
-          cases h' <;> cases heq
+          letI : Hashable d.type := d.hInst heq
           infer_instance
         oInst := fun oeq => by
-          cases o' <;> cases oeq
+          letI : Ord d.type := d.oInst oeq
           infer_instance
         bInst := fun beq => by
-          cases h' <;> cases o'
-          ·
-              have : False := by
-                cases beq with
-                | inl hEq => cases hEq
-                | inr oEq => cases oEq
-              cases this
-          · infer_instance
-          · infer_instance
-          · infer_instance
+          letI : BEq d.type := d.bInst beq
+          infer_instance
       }
   | .hashmap k v =>
       let kd := decode k
@@ -314,10 +259,11 @@ def decode {P} [∀ h o, ToType (P h o)]
         type := Std.HashMap kd.type vd.type
       }
   | .dhashmap k v =>
-      letI : Hashable (ToType.toType k) := inferInstance
-      letI : BEq (ToType.toType k) := inferInstance
+      let kd := Decodable.decode k
+      letI : Hashable kd.type := kd.hInst rfl
+      letI : BEq kd.type := kd.bInst (Or.inl rfl)
       {
-        type := Std.DHashMap (ToType.toType k) (fun a => (decode (v a)).type)
+        type := Std.DHashMap kd.type (fun a => (decode (v a)).type)
       }
   | .hashset k =>
       let kd := decode k
@@ -334,9 +280,10 @@ def decode {P} [∀ h o, ToType (P h o)]
         type := Std.TreeMap kd.type vd.type
       }
   | .dtreemap k v =>
-      letI : Ord (ToType.toType k) := inferInstance
+      let kd := Decodable.decode k
+      letI : Ord kd.type := kd.oInst rfl
       {
-        type := Std.DTreeMap (ToType.toType k) (fun a => (decode (v a)).type)
+        type := Std.DTreeMap kd.type (fun a => (decode (v a)).type)
       }
   | .treeset k =>
       let kd := decode k
@@ -351,16 +298,19 @@ def decode {P} [∀ h o, ToType (P h o)]
         type := dx.type → dy.type
       }
   | .sigma x y =>
+      let dx := Decodable.decode x
       {
-        type := (a : ToType.toType x) × (decode (y a)).type
+        type := (a : dx.type) × (decode (y a)).type
       }
   | .pi x y =>
+      let dx := Decodable.decode x
       {
-        type := (a : ToType.toType x) → (decode (y a)).type
+        type := (a : dx.type) → (decode (y a)).type
       }
   | .w d a b =>
+      let dd := Decodable.decode d
       {
-        type := WType (fun (x: ((x : ToType.toType d) × (decode (a x)).type)) => (decode (b x.1)).type)
+        type := WType (fun (x : ((x : dd.type) × (decode (a x)).type)) => (decode (b x.1)).type)
       }
   | .thunk x =>
       let d := decode x
@@ -368,111 +318,88 @@ def decode {P} [∀ h o, ToType (P h o)]
         type := Thunk d.type
       }
 
-def XTy.toType {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {h o} (t : XTy P h o) : Type :=
+instance instDecodableXTy {P} [∀ h o, Decodable (P h o) h o] {h o} :
+    Decodable (XTy P h o) h o where
+  decode := decode
+
+def XTy.toType {P} [∀ h o, Decodable (P h o) h o] {h o} (t : XTy P h o) : Type :=
   (decode t).type
 
-instance instHashXTy {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {o} (t : XTy P true o) : Hashable (XTy.toType t) :=
+instance instHashXTy {P} [∀ h o, Decodable (P h o) h o] {o} (t : XTy P true o) :
+    Hashable (XTy.toType t) :=
   (decode t).hInst rfl
 
-instance instOrdXTy {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {h} (t : XTy P h true) : Ord (XTy.toType t) :=
+instance instOrdXTy {P} [∀ h o, Decodable (P h o) h o] {h} (t : XTy P h true) :
+    Ord (XTy.toType t) :=
   (decode t).oInst rfl
 
-instance (priority := 100) instBEqXTyHash {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {o} (t : XTy P true o) : BEq (XTy.toType t) :=
+instance (priority := 100) instBEqXTyHash {P} [∀ h o, Decodable (P h o) h o] {o}
+    (t : XTy P true o) : BEq (XTy.toType t) :=
   (decode t).bInst (Or.inl rfl)
 
-instance (priority := 50) instBEqXTyOrd {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)]
-    {h} (t : XTy P h true) : BEq (XTy.toType t) :=
+instance (priority := 50) instBEqXTyOrd {P} [∀ h o, Decodable (P h o) h o] {h}
+    (t : XTy P h true) : BEq (XTy.toType t) :=
   (decode t).bInst (Or.inr rfl)
 
 -- Universe Hierarchy Construction
 
 structure NTyPack where
   T : Bool → Bool → Type
-  decode : ∀ h o, T h o → Decoded h o
+  [decodable : ∀ h o, Decodable (T h o) h o]
 
-instance instToTypeXTy {P} [∀ h o, ToType (P h o)]
-    [∀ o, (x : P true o) → Hashable (toType x)]
-    [∀ h, (x : P h true) → Ord (toType x)]
-    [∀ o, (x : P true o) → BEq (toType x)]
-    [∀ h, (x : P h true) → BEq (toType x)] {h o} :
-    ToType (XTy P h o) where
-  toType x := XTy.toType x
+attribute [instance] NTyPack.decodable
 
 @[reducible] def NTyStruct : (n : Nat) → NTyPack
 | 0 =>
   let T := fun h o => if h && o then STy else Empty
-  let decode : ∀ h o, T h o → Decoded h o
-    | true, true, x =>
+  let decodable : ∀ h o, Decodable (T h o) h o
+    | true, true =>
         {
-          type := ToType.toType (cast (by simp [T]) x : STy)
-          hInst := fun _ => by cases x <;> infer_instance
-          oInst := fun _ => by cases x <;> infer_instance
-          bInst := fun _ => by cases x <;> infer_instance
+          decode := fun x =>
+            {
+              type := ToType.toType (cast (by simp [T]) x : STy)
+              hInst := fun _ => by cases x <;> infer_instance
+              oInst := fun _ => by cases x <;> infer_instance
+              bInst := fun _ => by cases x <;> infer_instance
+            }
         }
-    | _, _, _ =>
+    | true, false =>
         {
-          type := Empty
-          hInst := fun _ => inferInstance
-          oInst := fun _ => inferInstance
-          bInst := fun _ => inferInstance
+          decode := by
+            intro x
+            cases x
         }
-  ⟨T, decode⟩
+    | false, true =>
+        {
+          decode := by
+            intro x
+            cases x
+        }
+    | false, false =>
+        {
+          decode := by
+            intro x
+            cases x
+        }
+  { T := T, decodable := decodable }
 | n + 1 =>
   let prev := NTyStruct n
-  let instToType : ∀ h o, ToType (prev.T h o) := fun h o =>
-    { toType := fun x => (prev.decode h o x).type }
-  let instHash : ∀ o, (x : prev.T true o) → Hashable (toType x) := fun o x =>
-    (prev.decode true o x).hInst rfl
-  let instOrd : ∀ h, (x : prev.T h true) → Ord (toType x) := fun h x =>
-    (prev.decode h true x).oInst rfl
-  let instBEqHash : ∀ o, (x : prev.T true o) → BEq (toType x) := fun o x =>
-    (prev.decode true o x).bInst (Or.inl rfl)
-  let instBEqOrd : ∀ h, (x : prev.T h true) → BEq (toType x) := fun h x =>
-    (prev.decode h true x).bInst (Or.inr rfl)
-  letI : ∀ h o, ToType (prev.T h o) := instToType
-  letI : ∀ o, (x : prev.T true o) → Hashable (toType x) := instHash
-  letI : ∀ h, (x : prev.T h true) → Ord (toType x) := instOrd
-  letI : ∀ o, (x : prev.T true o) → BEq (toType x) := instBEqHash
-  letI : ∀ h, (x : prev.T h true) → BEq (toType x) := instBEqOrd
-  let T := fun h o => @XTy prev.T instToType h o
-  let decode : ∀ h o, T h o → Decoded h o := fun _ _ x => decode (t := x)
-  ⟨T, decode⟩
+  letI : ∀ h o, Decodable (prev.T h o) h o := prev.decodable
+  let T := fun h o => XTy prev.T h o
+  let decodable : ∀ h o, Decodable (T h o) h o := by
+    intro h o
+    infer_instance
+  { T := T, decodable := decodable }
 
 @[reducible] def NTy (n : Nat) (h o : Bool) : Type := (NTyStruct n).T h o
-instance instNTy (n : Nat) (h o : Bool) : ToType (NTy n h o) where
-  toType x := (NTyStruct n).decode h o x |>.type
 instance instHashNTy (n : Nat) (o : Bool) (x : NTy n true o) :
-    Hashable (toType x) := (NTyStruct n).decode true o x |>.hInst rfl
+    Hashable (toType x) := (Decodable.decode x).hInst rfl
 instance instOrdNTy (n : Nat) (h : Bool) (x : NTy n h true) :
-    Ord (toType x) := (NTyStruct n).decode h true x |>.oInst rfl
+    Ord (toType x) := (Decodable.decode x).oInst rfl
 instance instBEqHashNTy (n : Nat) (o : Bool) (x : NTy n true o) :
-    BEq (toType x) := (NTyStruct n).decode true o x |>.bInst (Or.inl rfl)
+    BEq (toType x) := (Decodable.decode x).bInst (Or.inl rfl)
 instance instBEqOrdNTy (n : Nat) (h : Bool) (x : NTy n h true) :
-    BEq (toType x) := (NTyStruct n).decode h true x |>.bInst (Or.inr rfl)
+    BEq (toType x) := (Decodable.decode x).bInst (Or.inr rfl)
 
 -- Definition of CTy (Code Type) and Ty
 def CTy (h o : Bool) := (n : Nat) × NTy n h o
@@ -481,14 +408,13 @@ def Ty := Σ (h o : Bool), CTy h o
 
 instance : ToType Ty where
   toType t :=
-    let n := t.2.2.1
     let x := t.2.2.2
-    letI := instNTy n t.1 t.2.1
-    ToType.toType x
+    toType x
 
 -- Lift/Coercions
 
-instance {P : Bool → Bool → Type} [∀ h o, ToType (P h o)] {h o} : Coe (P h o) (XTy P h o) where
+instance {P : Bool → Bool → Type} [∀ h o, Decodable (P h o) h o] {h o} :
+    Coe (P h o) (XTy P h o) where
   coe := XTy.lift
 
 def lift_nty (m : Nat) {n : Nat} {h o} (x : NTy n h o) : NTy (n + m) h o :=
@@ -496,7 +422,8 @@ def lift_nty (m : Nat) {n : Nat} {h o} (x : NTy n h o) : NTy (n + m) h o :=
   | 0 => x
   | m + 1 =>
     let x' := lift_nty m x
-    XTy.lift x'
+    by
+      simpa [NTy, NTyStruct] using (XTy.lift x')
 
 instance (n m : Nat) {h o} : Coe (NTy n h o) (NTy (n + m) h o) where
   coe := lift_nty m

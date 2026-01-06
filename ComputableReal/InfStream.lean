@@ -38,9 +38,25 @@ def run (s : InfStream τ T α) (n : Nat) : InfStreamAt s n :=
   let res := s.step_n n
   ⟨res.1, res.2, rfl⟩
 
-def ofFn [Inhabited τ] [Inhabited (T default)] (f : Nat → α) : InfStream τ T α :=
-  { stateTy := default
-    init := default
-    step := fun n _ => (default, f n) }
+def ofFn [Inhabited τ] [Inhabited (T default)] (f : Nat → α) : InfStream τ T α := by
+  classical
+  exact
+    { stateTy := (default : τ)
+      init := (default : T (default : τ))
+      step := fun n _ => ((default : T (default : τ)), f n) }
+
+theorem compute_step_ofFn [Inhabited τ] [Inhabited (T default)] (f : Nat → α) (k n : Nat) :
+    (ofFn (τ:=τ) (T:=T) f).compute_step (ofFn (τ:=τ) (T:=T) f).init k n =
+      ((ofFn (τ:=τ) (T:=T) f).init, f (k + n)) := by
+  induction n generalizing k with
+  | zero =>
+      simp [compute_step, ofFn]
+  | succ n ih =>
+      simp [compute_step, ofFn]
+      simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using (ih (k:=k + 1))
+
+@[simp] theorem seq_ofFn [Inhabited τ] [Inhabited (T default)] (f : Nat → α) (n : Nat) :
+    (ofFn (τ:=τ) (T:=T) f).seq n = f n := by
+  simp [seq, step_n, compute_step_ofFn, Nat.add_comm]
 
 end InfStream

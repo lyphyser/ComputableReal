@@ -1,5 +1,8 @@
 import ComputableReal.ComputableRSeq
 import ComputableReal.ComputableReal
+import ComputableReal.InfStream
+import ComputableReal.SetInfStream
+import ComputableReal.CauchyStream
 import ComputableReal.IsComputable
 import ComputableReal.IsComputableC
 import ComputableReal.SpecialFunctions

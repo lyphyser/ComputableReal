@@ -4,7 +4,8 @@ import Mathlib.SetTheory.Ordinal.Notation
 import Mathlib.Data.Quot
 import Mathlib.Data.Finset.Basic
 import Mathlib.Data.Multiset.Basic
-import Mathlib.Data.Prod.Lex
+import Mathlib.Order.RelClasses
+import Mathlib.Order.WithBot
 import Batteries.Data.Vector
 import Std.Data.HashMap
 import Std.Data.DHashMap
@@ -109,28 +110,66 @@ instance {P} [ToType P] : ToType (XTy P) where
 
 -- Universe Hierarchy Construction
 
-structure NTyPack where
+structure TyBundle where
   T : Type
   [toType : ToType T]
 
-attribute [instance] NTyPack.toType
+attribute [instance] TyBundle.toType
 
-@[reducible] def NTyStruct : (n : Nat) → NTyPack
-| 0 =>
-  ⟨STy⟩
-| n + 1 =>
-  let prev := NTyStruct n
-  letI : ToType prev.T := prev.toType
-  ⟨XTy prev.T⟩
+@[reducible] def iterXTyBundle (P : Type) [ToType P] : Nat → TyBundle
+  | 0 => ⟨P⟩
+  | n + 1 =>
+      let prev := iterXTyBundle P n
+      letI : ToType prev.T := prev.toType
+      ⟨XTy prev.T⟩
 
-@[reducible] def NTy (n : Nat) : Type := (NTyStruct n).T
-instance instToTypeNTy (n : Nat) : ToType (NTy n) :=
-  (NTyStruct n).toType
+@[reducible] def IterXTy (n : Nat) (P : Type) [ToType P] : Type :=
+  (iterXTyBundle P n).T
+
+instance instToTypeIterXTy (n : Nat) (P : Type) [ToType P] : ToType (IterXTy n P) :=
+  (iterXTyBundle P n).toType
+
+@[reducible] def nTyLimitBundle {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι] : ι → TyBundle :=
+  (inferInstance : WellFoundedLT ι).wf.fix fun i rec =>
+    let baseBundle : { x : WithBot ι // x < i } → TyBundle
+      | ⟨⊥, _⟩ => ⟨α⟩
+      | ⟨some a, ha⟩ =>
+          have ha' : a < i := by
+            cases ha with
+            | coe_lt_coe h => exact h
+          rec a ha'
+    let T :=
+      Σ x : { x : WithBot ι // x < i }, Σ n : Nat,
+        IterXTy n (baseBundle x).T
+    letI : ToType T :=
+      { toType := fun t =>
+          let ⟨x, n, v⟩ := t
+          letI : ToType (baseBundle x).T := (baseBundle x).toType
+          letI : ToType (IterXTy n (baseBundle x).T) :=
+            instToTypeIterXTy n (baseBundle x).T
+          toType v }
+    ⟨T⟩
+
+@[reducible] def nTyBundle {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι] :
+    (n : WithBot ι × Nat) → TyBundle
+  | (i, k) =>
+      let base : TyBundle := match i with
+        | ⊥ => ⟨α⟩
+        | some i => nTyLimitBundle (α:=α) (ι:=ι) i
+      letI : ToType base.T := base.toType
+      iterXTyBundle base.T k
+
+@[reducible] def NTy {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι]
+    (n : WithBot ι × Nat) : Type :=
+  (nTyBundle (α:=α) (ι:=ι) n).T
+instance instToTypeNTy {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι]
+    (n : WithBot ι × Nat) : ToType (NTy (α:=α) (ι:=ι) n) :=
+  (nTyBundle (α:=α) (ι:=ι) n).toType
 
 -- Definition of Ty
-def Ty := Σ n, NTy n
+def Ty (α ι : Type) [ToType α] [LT ι] [WellFoundedLT ι] := Σ n, NTy (α:=α) (ι:=ι) n
 
-instance : ToType Ty where
+instance {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι] : ToType (Ty α ι) where
   toType t := toType t.2
 
 -- Lift/Coercions
@@ -138,14 +177,6 @@ instance : ToType Ty where
 instance {P : Type} [ToType P] : Coe P (XTy P) where
   coe := XTy.lift
 
-def lift_nty (m : Nat) {n : Nat} (x : NTy n) : NTy (n + m) :=
-  match m with
-  | 0 => x
-  | m + 1 =>
-    XTy.lift (lift_nty m x)
-
-instance (n m : Nat) : Coe (NTy n) (NTy (n + m)) where
-  coe := lift_nty m
-
-instance {n} : CoeOut (NTy n) Ty where
+instance {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι] {n : WithBot ι × Nat} :
+    CoeOut (NTy (α:=α) (ι:=ι) n) (Ty α ι) where
   coe t := ⟨n, t⟩

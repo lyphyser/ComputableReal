@@ -6,26 +6,29 @@
 - If a proof is hard, you can temporarily replace it with a sorry. Fill out the sorry afterwards once it compiles
 - Always fill out your sorries unless allowed to do otherwise
 - Never replace value terms with 0 or default just to make things compile
-- If you are doing a complex proof or filling out sorries, use the "trace_state" tactic to print the hypotheses and goal where you insert it (e.g. just before a sorry). If you don't see the output, add "-v" to the lake build command line
-- Always run lake with TERM=dumb so it doesn't print redundant progress lines
-- Name new definitions/theorems/variables according to Mathlib style and in general write code that would be suitable for inclusion in Std or Mathlib
-- ALWAYS polish the code as described below once it compiles correctly and before showing it to me
+- If you are doing a complex proof or filling out sorries in the middle of a proof, use the "trace_state" tactic to print the hypotheses and goal where you insert it (e.g. just before a sorry) so you can know what you need to prove. If you do't see the output, add "-v" to the lake build command line
+- Try to follow the style guidelines right away
+- After the change compiles, ALWAYS improve to code to make sure that it follows the style guidelines, and also look for opportunities to polish, improve and simplify the code until the code seems perfect and terse, like the code in the Lean project itself and in Mathlib
 
-## Polishing
-After the change compiles, look for opportunities to polish, improve and simplify the code, and continue until the code seems perfect and terse. In particular:
-- Replace non-terminal simps with simp only using the simp? tactic
-- Replace identical match cases with a single one with multiple patterns
-- Replace identical starts in goal proofs with <;> or all_goals
-- Try to remove all dsimp and other defeq-only tactics, and see if it still compiles
-- When there are some proof steps that are details or calculations, try to replace them with a single "grind" tactic invocation and see if it still compiles
-- For each type ascriptions and type specifications for local variables and global aliases, try to remove it and see if it still compiles thanks to type inference
-- Replace fun ... a => ... a with fun ... => ..., and do the same for defs and structure member functions
-- For any specification of implicit parameters e.g. (a := ...), try to remove it and see if the code still compiles because the argument is inverted
-- For each @, try to remive it in favor of haveI/letI or type ascriptions
-- Remove "intro" tactics at the start of the proof, and instead name the argument in the declaration
-- Inline local variables, helpers and lemmas used once if the definition is short or trivial
-- Replace one-line tactic proofs with the term if it's shorter (especially the exact and rfl tactics)
-- Replace refine with ?_ with an apply with just the lemma name
-- Define helpers for remaining repeated code
-- When multiple definitions have repeated instance or implicit parameters, or repeat complicated explicit parameters, reorder them so they are consecutive and wrap them in a section and replace them with a single variable line. Do this hierarchically if needed. Use "variable (a) in ..." or "variable {a} in ..." if parameters have the same name and types but different implicitness
-- Use idiomatic letters for parameters matching Mathlib style
+## Style guidelines
+
+- Mathlib style: follow the Mathlib style guide
+- Idiomatic names: name new definitions/theorems/variables according to Mathlib style and in general write code that would be suitable for inclusion in Std or Mathlib
+- Idiomatic type parameter letters: follow Mathlib style
+- Don't pollute the global namespace: lut defs and theorems about a type defined in a file in a namespace with the same name as the type
+- No non-terminal simps: replace non-terminal simps with simp only using the simp? tactic
+- No identical match cases: replace them with a single one with multiple patterns
+- No goal proofs with duplicated starts: use <;> or all_goals to apply those tactics to all goals
+- No unnecessary dsimp: try to remove all dsimps, and see if it still compiles
+- No proof details or calculations that could just be done by "grind": try to replace proof parts that seem trivial or only involve numeric or logical manipulations with a single "grind" tactic invocation and see if it still compiles
+- No unnecessary type ascriptions or type specifications for local variables and global aliases: try to remove them and see if it still compiles thanks to type inference
+- Eta-normal form: replace fun ... a => ... a with fun ... => ..., and do the same for defs and structure member functions
+- No implicit parameters specifications: For any specification of implicit arguments e.g. (a := ...), try to remove it and see if the code still compiles because the argument is inverted
+- No @ form: for each @, try to remive it in favor of haveI/letI or type ascriptions
+- No "intro" tactics at the start of the proof: remove them and instead name the arguments in the declaration
+- No unnecessary local variables, helpers and lemmas: inline those used once if the definition is short or trivial and if they aren't expected to be used in other files
+- No "by exact": replace it with just the term
+- No "by rfl": just use rfl instead
+- No refine: replace refine with apply, removing all trailing ?_
+- No code duplication: define helpers for repeated code
+- No repetition in parameters: when multiple definitions have repeated instance or implicit parameters, or repeat complicated explicit parameters, reorder them so they are consecutive and wrap them in a section and replace them with a single variable line. Do this hierarchically if needed. Use "variable (a) in ..." or "variable {a} in ..." if parameters have the same name and types but different implicitness

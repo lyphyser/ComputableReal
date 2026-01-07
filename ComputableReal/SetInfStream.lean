@@ -20,6 +20,6 @@ variable {β : Type u} {α : Type w} [SetLike α β] {τ : Type u} {T : τ → T
   (Valid when α has a SetLike instance interpreted as sets of β)
 -/
 def toFilter (s : InfStream τ T α) : Filter β :=
-  ⨅ n, 𝓟 (s.seq n : Set β)
+  Filter.generate (Set.range (fun n ↦ (s.seq n : Set β)))
 
 end InfStream

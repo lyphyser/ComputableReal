@@ -152,6 +152,8 @@ instance instToTypeIterXTy (n : Nat) (P : Type) [ToType P] : ToType (IterXTy n P
 
 abbrev TyIndex (ι : Type) := WithBot ι × Nat
 
+namespace TyIndex
+
 def pred {ι} (i : TyIndex ι) : TyIndex ι := (i.1, i.2 - 1)
 def succ {ι} (i : TyIndex ι) : TyIndex ι := (i.1, i.2 + 1)
 
@@ -188,6 +190,8 @@ lemma pred_toXTyIdx {ι} (i : TyIndex ι) : pred (toXTyIdx i) = pred i := by
     apply Nat.sub_eq_zero_of_le
     exact Nat.one_le_iff_ne_zero.not.mp ‹_›
 
+end TyIndex
+
 @[reducible] def nTyBundle {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι] :
     (n : TyIndex ι) → TyBundle
   | (i, k) =>
@@ -204,22 +208,26 @@ instance instToTypeNTy {α ι : Type} [ToType α] [LT ι] [WellFoundedLT ι]
     (n : TyIndex ι) : ToType (NTy (α:=α) (ι:=ι) n) :=
   (nTyBundle (α:=α) (ι:=ι) n).toType
 
-lemma NTy_eq_XTy_pred {α ι} [ToType α] [LT ι] [WellFoundedLT ι] (i : TyIndex ι) (h : isSucc i) :
-    NTy (α:=α) (ι:=ι) i = XTy (NTy (α:=α) (ι:=ι) (pred i)) := by
+namespace NTy
+
+lemma eq_XTy_pred {α ι} [ToType α] [LT ι] [WellFoundedLT ι] (i : TyIndex ι) (h : TyIndex.isSucc i) :
+    NTy (α:=α) (ι:=ι) i = XTy (NTy (α:=α) (ι:=ι) (TyIndex.pred i)) := by
   unfold NTy nTyBundle
   cases i with | mk i k =>
   dsimp
-  dsimp [pred]
+  dsimp [TyIndex.pred]
   have : k = k - 1 + 1 := by
     rw [Nat.sub_add_cancel]
     exact Nat.pos_of_ne_zero h
   rw [this, iterXTyBundle]
   rfl
 
-lemma NTy_toXTyIdx {α ι} [ToType α] [LT ι] [WellFoundedLT ι] (i : TyIndex ι) :
-    NTy (α:=α) (ι:=ι) (toXTyIdx i) = XTy (NTy (α:=α) (ι:=ι) (pred i)) := by
-  rw [NTy_eq_XTy_pred _ (isSucc_toXTyIdx i)]
-  rw [pred_toXTyIdx]
+lemma toXTyIdx {α ι} [ToType α] [LT ι] [WellFoundedLT ι] (i : TyIndex ι) :
+    NTy (α:=α) (ι:=ι) (TyIndex.toXTyIdx i) = XTy (NTy (α:=α) (ι:=ι) (TyIndex.pred i)) := by
+  rw [eq_XTy_pred _ (TyIndex.isSucc_toXTyIdx i)]
+  rw [TyIndex.pred_toXTyIdx]
+
+end NTy
 
 -- Definition of Ty
 def Ty (α ι : Type) [ToType α] [LT ι] [WellFoundedLT ι] := Σ n : TyIndex ι, NTy (α:=α) (ι:=ι) n
